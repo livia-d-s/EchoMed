@@ -1,0 +1,7 @@
+{
+  "name": "EchoMed - Teste MVP",
+  "description": "Um copiloto médico que transcreve consultas em tempo real e usa IA para gerar insights diagnósticos estruturados, sugestões de exames e recomendações de medicamentos.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

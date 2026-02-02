@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Sliders, Pencil, Check, X } from 'lucide-react';
-import { Patient } from '../../../types';
+import { ArrowLeft, Plus, Sliders, Pencil, Check, X, Target, Dumbbell } from 'lucide-react';
+import { Patient, GOAL_LABELS } from '../../../types';
 
 interface PatientHeaderProps {
   patient: Patient;
@@ -118,6 +118,26 @@ export function PatientHeader({
               <p className="text-slate-500 text-sm mt-0.5">
                 Paciente desde {formatDate(patient.createdAt)}
               </p>
+              {/* Goal and Training Display */}
+              {(patient.goals?.length || patient.goal || patient.trainingRoutine?.length) && (
+                <div className="flex flex-wrap items-center gap-2 mt-2">
+                  {(patient.goals?.length || patient.goal) && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
+                      <Target size={10} />
+                      {patient.goals?.length
+                        ? patient.goals.map(g => g === 'outro' ? patient.goalCustom : GOAL_LABELS[g]).join(' + ')
+                        : (patient.goal === 'outro' ? patient.goalCustom : GOAL_LABELS[patient.goal!])
+                      }
+                    </span>
+                  )}
+                  {patient.trainingRoutine?.length ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                      <Dumbbell size={10} />
+                      {patient.trainingRoutine.map(t => `${t.type}: ${t.frequency}`).join(', ')}
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </div>
           </div>
 

@@ -36,6 +36,32 @@ export enum AppStatus {
 
 // ============ PATIENT-CENTRIC TYPES ============
 
+export interface TrainingActivity {
+  type: string;      // e.g., "Musculação", "Natação", "Corrida"
+  frequency: string; // e.g., "3x/semana"
+}
+
+export type PatientGoal =
+  | 'ganho_muscular'
+  | 'perda_gordura'
+  | 'manutencao'
+  | 'performance'
+  | 'forca'
+  | 'recuperacao'
+  | 'saude_geral'
+  | 'outro';
+
+export const GOAL_LABELS: Record<PatientGoal, string> = {
+  ganho_muscular: 'Ganho Muscular',
+  perda_gordura: 'Perda de Gordura',
+  manutencao: 'Manutenção',
+  performance: 'Performance',
+  forca: 'Força',
+  recuperacao: 'Recuperação de Lesão',
+  saude_geral: 'Saúde Geral',
+  outro: 'Outro'
+};
+
 export interface Patient {
   id: string;
   name: string;
@@ -43,6 +69,12 @@ export interface Patient {
   email?: string;
   birthDate?: string;
   createdAt: string;
+  // New nutrition-focused fields
+  goal?: PatientGoal;            // Legacy single goal (for backwards compat)
+  goals?: PatientGoal[];         // Supports up to 2 goals
+  goalCustom?: string;           // If goal is 'outro'
+  trainingRoutine?: TrainingActivity[];
+  isFirstConsultation?: boolean; // Tracks if first consultation was done
 }
 
 export type EventType = 'initial' | 'followup' | 'adjustment';

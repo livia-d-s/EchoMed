@@ -3,7 +3,7 @@ import {
   Mic, Square, Pause, Play, Activity, User, FileText,
   ArrowLeft, Camera, Check, AlertTriangle, Loader2, Users, Pencil, Info, CheckCircle, Trash2
 } from 'lucide-react';
-import { Patient, TimelineEvent, EventType } from '../types';
+import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingActivity } from '../types';
 import { PatientList, PatientPage } from './components/patient';
 
 // Firebase Imports
@@ -177,6 +177,12 @@ export default function App() {
   const [currentResult, setCurrentResult] = useState(null);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
+  // Patient context for current consultation (supports up to 2 goals)
+  const [currentPatientGoals, setCurrentPatientGoals] = useState<PatientGoal[]>([]);
+  const [currentPatientGoalCustom, setCurrentPatientGoalCustom] = useState('');
+  const [currentPatientTraining, setCurrentPatientTraining] = useState<TrainingActivity[]>([]);
+  const [currentIsFirstConsultation, setCurrentIsFirstConsultation] = useState<boolean | null>(null);
+
   // Show toast notification
   const showToast = (message: string) => {
     setToast({ message, visible: true });
@@ -273,17 +279,44 @@ export default function App() {
     }
   }, [history, patients.length]);
 
-  // Helper to find or create patient
-  const findOrCreatePatient = (name: string): Patient => {
+  // Helper to find or create patient with context
+  const findOrCreatePatient = (
+    name: string,
+    context?: {
+      goals?: PatientGoal[];
+      goalCustom?: string;
+      training?: TrainingActivity[];
+      isFirstConsultation?: boolean | null;
+    }
+  ): Patient => {
     const normalizedName = normalizePatientName(name);
     const normalizedLower = normalizedName.toLowerCase();
     const existing = patients.find(p => p.name.toLowerCase() === normalizedLower);
-    if (existing) return existing;
+
+    if (existing) {
+      // Update existing patient with new context if provided
+      if (context && (context.goals?.length || context.training?.length)) {
+        const updatedPatient = {
+          ...existing,
+          goals: context.goals?.length ? context.goals : existing.goals,
+          goalCustom: context.goalCustom || existing.goalCustom,
+          trainingRoutine: context.training?.length ? context.training : existing.trainingRoutine,
+          isFirstConsultation: context.isFirstConsultation !== null ? context.isFirstConsultation : existing.isFirstConsultation
+        };
+        setPatients(prev => prev.map(p => p.id === existing.id ? updatedPatient : p));
+        return updatedPatient;
+      }
+      return existing;
+    }
 
     const newPatient: Patient = {
       id: `patient_${Date.now()}`,
       name: normalizedName,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      goals: context?.goals,
+      goalCustom: context?.goalCustom,
+      trainingRoutine: context?.training,
+      isFirstConsultation: context?.isFirstConsultation ?? true
     };
     setPatients(prev => [...prev, newPatient]);
     return newPatient;
@@ -432,12 +465,42 @@ export default function App() {
   }, [user]);
 
   // --- Lógica de IA ---
-  const callGeminiAI = async (text: string) => {
-    // Agora chamamos o backend seguro ao invés de chamar o Gemini diretamente
+  const callGeminiAI = async (
+    text: string,
+    patientContext?: {
+      goal?: string;
+      training?: TrainingActivity[];
+      isFirstConsultation?: boolean;
+    }
+  ) => {
+    // Build context string for AI
+    let contextInfo = '';
+    if (patientContext) {
+      const parts = [];
+      if (patientContext.goal) {
+        parts.push(`Objetivo do paciente: ${patientContext.goal}`);
+      }
+      if (patientContext.training?.length) {
+        const trainingStr = patientContext.training
+          .map(t => `${t.type}: ${t.frequency}`)
+          .join(', ');
+        parts.push(`Rotina de treino: ${trainingStr}`);
+      }
+      if (patientContext.isFirstConsultation !== undefined) {
+        parts.push(patientContext.isFirstConsultation ? 'Primeira consulta' : 'Consulta de retorno');
+      }
+      if (parts.length > 0) {
+        contextInfo = `\n\n[CONTEXTO DO PACIENTE]\n${parts.join('\n')}`;
+      }
+    }
+
     const response = await fetch(`${backendUrl}/api/analyze-medical`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: text })
+      body: JSON.stringify({
+        transcript: text + contextInfo,
+        patientContext
+      })
     });
 
     if (!response.ok) {
@@ -452,7 +515,18 @@ export default function App() {
     if (!currentTranscript.trim()) return;
     setStatus(AppStatus.PROCESSING);
     try {
-      const aiResponse = await callGeminiAI(currentTranscript);
+      // Build patient context for AI (supports multiple goals)
+      const goalLabels = currentPatientGoals.length > 0
+        ? currentPatientGoals.map(g => g === 'outro' ? currentPatientGoalCustom : GOAL_LABELS[g]).join(' + ')
+        : undefined;
+
+      const patientContext = {
+        goal: goalLabels,
+        training: currentPatientTraining,
+        isFirstConsultation: currentIsFirstConsultation ?? undefined
+      };
+
+      const aiResponse = await callGeminiAI(currentTranscript, patientContext);
       const now = new Date().toISOString();
 
       // Create consultation record (legacy format for backward compatibility)
@@ -470,7 +544,12 @@ export default function App() {
       setHistory((prev: any) => [consultationRecord, ...prev]);
 
       // === Patient-centric storage ===
-      const patient = findOrCreatePatient(patientName || 'Anônimo');
+      const patient = findOrCreatePatient(patientName || 'Anônimo', {
+        goals: currentPatientGoals,
+        goalCustom: currentPatientGoalCustom,
+        training: currentPatientTraining,
+        isFirstConsultation: currentIsFirstConsultation
+      });
 
       // Determine if this is initial or followup
       const patientEvents = events.filter(e => e.patientId === patient.id);
@@ -515,7 +594,7 @@ export default function App() {
             <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-200"><Activity size={22} /></div>
             <div>
               <h1 className="font-black text-xl tracking-tight leading-none">EchoMed</h1>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">AI Medical Assistant</span>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">IA para Nutricionistas</span>
             </div>
           </div>
           <div className="flex items-center gap-6">
@@ -549,6 +628,11 @@ export default function App() {
             onFinalize={finalizeConsultation}
             patients={patients}
             events={events}
+            // Patient context (supports up to 2 goals)
+            patientGoals={currentPatientGoals} setPatientGoals={setCurrentPatientGoals}
+            patientGoalCustom={currentPatientGoalCustom} setPatientGoalCustom={setCurrentPatientGoalCustom}
+            patientTraining={currentPatientTraining} setPatientTraining={setCurrentPatientTraining}
+            isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
           />
         )}
         {view === 'patients' && (
@@ -739,12 +823,38 @@ function ProfilePopup({ profile, onSave, onClose }: any) {
   );
 }
 
-function TranscriptionView({ status, setStatus, patientName, setPatientName, transcript, setTranscript, onFinalize, patients, events }: any) {
+function TranscriptionView({
+  status, setStatus, patientName, setPatientName, transcript, setTranscript, onFinalize, patients, events,
+  patientGoals, setPatientGoals, patientGoalCustom, setPatientGoalCustom,
+  patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation
+}: any) {
   const recognitionRef = useRef<any>(null);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
   const [interim, setInterim] = useState('');
   const [showNamePopup, setShowNamePopup] = useState(false);
   const [tempName, setTempName] = useState('');
+  const [tempGoals, setTempGoals] = useState<PatientGoal[]>([]);
+  const [tempGoalCustom, setTempGoalCustom] = useState('');
+  const [tempTraining, setTempTraining] = useState('');
+  const [tempIsFirst, setTempIsFirst] = useState<boolean | null>(null);
+  const [inlineTrainingText, setInlineTrainingText] = useState('');
+
+  // Sync inlineTrainingText when patientTraining changes externally (e.g., selecting a patient)
+  useEffect(() => {
+    setInlineTrainingText(formatTraining(patientTraining || []));
+  }, [patientTraining]);
+
+  // Toggle goal selection (max 2)
+  const toggleGoal = (goal: PatientGoal, isTemp = false) => {
+    const currentGoals = isTemp ? tempGoals : (patientGoals || []);
+    const setGoals = isTemp ? setTempGoals : setPatientGoals;
+
+    if (currentGoals.includes(goal)) {
+      setGoals(currentGoals.filter((g: PatientGoal) => g !== goal));
+    } else if (currentGoals.length < 2) {
+      setGoals([...currentGoals, goal]);
+    }
+  };
   const [pendingAction, setPendingAction] = useState<'record' | 'finalize' | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [autoSaveIndicator, setAutoSaveIndicator] = useState(false);
@@ -752,6 +862,26 @@ function TranscriptionView({ status, setStatus, patientName, setPatientName, tra
   const [recordingStartTime, setRecordingStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [accumulatedTime, setAccumulatedTime] = useState(0);
+
+  // Parse training string to TrainingActivity array
+  const parseTraining = (str: string): TrainingActivity[] => {
+    if (!str.trim()) return [];
+    // Format: "Musculação 3x, Natação 1x" or "Musculação: 3x/semana, Natação: 1x/semana"
+    return str.split(',').map(item => {
+      const clean = item.trim();
+      const match = clean.match(/^([^:0-9]+?)[\s:]*(\d+x?\/?(?:semana)?)/i);
+      if (match) {
+        return { type: match[1].trim(), frequency: match[2].trim() };
+      }
+      return { type: clean, frequency: '' };
+    }).filter(t => t.type);
+  };
+
+  // Format training array to display string
+  const formatTraining = (training: TrainingActivity[]): string => {
+    if (!training?.length) return '';
+    return training.map(t => `${t.type}: ${t.frequency}`).join(', ');
+  };
 
   // Format elapsed time as MM:SS
   const formatElapsedTime = (seconds: number) => {
@@ -807,6 +937,12 @@ function TranscriptionView({ status, setStatus, patientName, setPatientName, tra
     lastVisit: getLastVisitDate(p.id)
   })).slice(0, 5) || [];
 
+  // Check if patient name exactly matches an existing patient
+  const isExistingPatient = patients?.some((p: any) =>
+    patientName.trim() &&
+    p.name.toLowerCase() === patientName.trim().toLowerCase()
+  );
+
   // Auto-save transcript to localStorage
   useEffect(() => {
     if (transcript && patientName) {
@@ -853,6 +989,10 @@ function TranscriptionView({ status, setStatus, patientName, setPatientName, tra
     if (!patientName.trim()) {
       setPendingAction(action);
       setTempName('');
+      setTempGoals([]);
+      setTempGoalCustom('');
+      setTempTraining('');
+      setTempIsFirst(null);
       setShowNamePopup(true);
       return false;
     }
@@ -861,7 +1001,16 @@ function TranscriptionView({ status, setStatus, patientName, setPatientName, tra
 
   const handleNameSubmit = () => {
     if (!tempName.trim()) return;
+
+    // Set patient name
     setPatientName(normalizePatientName(tempName));
+
+    // Set patient context (supports multiple goals)
+    if (tempGoals.length > 0) setPatientGoals(tempGoals);
+    if (tempGoalCustom) setPatientGoalCustom(tempGoalCustom);
+    if (tempTraining.trim()) setPatientTraining(parseTraining(tempTraining));
+    if (tempIsFirst !== null) setIsFirstConsultation(tempIsFirst);
+
     setShowNamePopup(false);
     if (pendingAction === 'record') {
       setTimeout(() => doStartRecording(), 100);
@@ -1014,6 +1163,104 @@ function TranscriptionView({ status, setStatus, patientName, setPatientName, tra
         </div>
       </div>
 
+      {/* Inline Patient Context Inputs - show only for NEW patients (not in history) */}
+      {patientName.trim() && status === AppStatus.IDLE && !isExistingPatient && suggestions.length === 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 -mt-2 space-y-3 animate-in fade-in duration-200">
+          {/* First Consultation Toggle */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider w-28 flex-shrink-0">Consulta:</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setIsFirstConsultation(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  isFirstConsultation === true
+                    ? 'bg-green-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Primeira
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsFirstConsultation(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  isFirstConsultation === false
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                Retorno
+              </button>
+            </div>
+          </div>
+
+          {/* Goal Selection (max 2) */}
+          <div className="flex items-start gap-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider w-28 flex-shrink-0 pt-1">
+              Objetivo <span className="text-slate-300 font-normal">(máx. 2)</span>:
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {(['ganho_muscular', 'perda_gordura', 'manutencao', 'performance', 'forca', 'recuperacao', 'saude_geral'] as PatientGoal[]).map((goal) => (
+                <button
+                  key={goal}
+                  type="button"
+                  onClick={() => toggleGoal(goal, false)}
+                  disabled={!patientGoals?.includes(goal) && (patientGoals?.length || 0) >= 2}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    patientGoals?.includes(goal)
+                      ? 'bg-purple-600 text-white'
+                      : (patientGoals?.length || 0) >= 2
+                        ? 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  {GOAL_LABELS[goal]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Training Routine */}
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider w-28 flex-shrink-0">
+              Treino <span className="text-slate-300 font-normal">(opcional)</span>:
+            </span>
+            <input
+              type="text"
+              placeholder="Ex: Musculação 3x, Natação 1x"
+              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+              value={inlineTrainingText}
+              onChange={(e) => setInlineTrainingText(e.target.value)}
+              onBlur={() => setPatientTraining(parseTraining(inlineTrainingText))}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Patient Context Display (when recording/paused) */}
+      {(patientGoals?.length > 0 || patientTraining?.length > 0 || isFirstConsultation !== null) && status !== AppStatus.IDLE && (
+        <div className="flex flex-wrap items-center gap-2 -mt-2">
+          {isFirstConsultation !== null && (
+            <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+              isFirstConsultation ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+            }`}>
+              {isFirstConsultation ? 'Primeira Consulta' : 'Retorno'}
+            </span>
+          )}
+          {patientGoals?.length > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-700">
+              {patientGoals.map((g: PatientGoal) => g === 'outro' ? patientGoalCustom : GOAL_LABELS[g]).join(' + ')}
+            </span>
+          )}
+          {patientTraining?.length > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">
+              {formatTraining(patientTraining)}
+            </span>
+          )}
+        </div>
+      )}
+
       <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl h-[450px] flex flex-col relative overflow-hidden">
         <div
           ref={transcriptContainerRef}
@@ -1062,44 +1309,119 @@ function TranscriptionView({ status, setStatus, patientName, setPatientName, tra
           <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center z-50">
             <Loader2 className="animate-spin text-blue-600 mb-4" size={56} />
             <h2 className="text-2xl font-black">Inteligência EchoMed Ativa</h2>
-            <p className="text-slate-500 font-bold mt-2">Cruzando sintomas e dados clínicos...</p>
+            <p className="text-slate-500 font-bold mt-2">Analisando perfil nutricional do paciente...</p>
           </div>
         )}
       </div>
 
-      {/* Patient Name Popup */}
+      {/* Patient Pre-Consultation Popup */}
       {showNamePopup && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <User size={32} className="text-blue-600" />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl animate-in fade-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
+            <div className="text-center mb-5">
+              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <User size={28} className="text-blue-600" />
               </div>
-              <h3 className="text-2xl font-black text-slate-900">Nome Completo do Paciente</h3>
-              <p className="text-slate-500 mt-2">Por favor, informe o nome completo para evitar confusão entre pacientes.</p>
+              <h3 className="text-xl font-black text-slate-900">Dados do Paciente</h3>
+              <p className="text-slate-400 text-sm mt-1">Preencha rapidamente antes de iniciar</p>
             </div>
-            <input
-              type="text"
-              placeholder="Ex: Maria Silva Santos"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-4 px-5 outline-none font-bold text-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all mb-4"
-              value={tempName}
-              onChange={(e) => setTempName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleNameSubmit()}
-              autoFocus
-            />
+
+            {/* Patient Name */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nome Completo</label>
+              <input
+                type="text"
+                placeholder="Ex: Maria Silva Santos"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 outline-none font-bold focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                value={tempName}
+                onChange={(e) => setTempName(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            {/* First Consultation Toggle */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Primeira Consulta?</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTempIsFirst(true)}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    tempIsFirst === true
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Sim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTempIsFirst(false)}
+                  className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all ${
+                    tempIsFirst === false
+                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Retorno
+                </button>
+              </div>
+            </div>
+
+            {/* Goal Quick Select (max 2) */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Objetivo <span className="text-slate-300 font-normal">(máx. 2)</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {(['ganho_muscular', 'perda_gordura', 'manutencao', 'performance', 'forca', 'recuperacao', 'saude_geral'] as PatientGoal[]).map((goal) => (
+                  <button
+                    key={goal}
+                    type="button"
+                    onClick={() => toggleGoal(goal, true)}
+                    disabled={!tempGoals.includes(goal) && tempGoals.length >= 2}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      tempGoals.includes(goal)
+                        ? 'bg-blue-600 text-white'
+                        : tempGoals.length >= 2
+                          ? 'bg-slate-50 text-slate-300 cursor-not-allowed'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {GOAL_LABELS[goal]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Training Routine (Optional) */}
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Rotina de Treino <span className="text-slate-300 font-normal">(opcional)</span>
+              </label>
+              <input
+                type="text"
+                placeholder="Ex: Musculação 3x, Natação 1x"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                value={tempTraining}
+                onChange={(e) => setTempTraining(e.target.value)}
+              />
+            </div>
+
+            {/* Action Buttons */}
             <div className="flex gap-3">
               <button
                 onClick={() => { setShowNamePopup(false); setPendingAction(null); }}
-                className="flex-1 py-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
+                className="flex-1 py-3.5 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleNameSubmit}
                 disabled={!tempName.trim()}
-                className="flex-1 py-4 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3.5 rounded-xl font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Confirmar
+                Iniciar
               </button>
             </div>
           </div>

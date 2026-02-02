@@ -58,19 +58,26 @@ sem inventar dados.
 
     const prompt = `${systemPrompt}\n\nTranscrição da consulta:\n${transcript}`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+    // Add timeout for Vercel free tier (10s limit)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         contents: [{
           parts: [{ text: prompt }]
         }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048
+          temperature: 0.5,
+          maxOutputTokens: 1024
         }
       })
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorData = await response.json();
@@ -103,6 +110,14 @@ sem inventar dados.
 
   } catch (error) {
     console.error("Erro na análise nutricional:", error);
+
+    if (error.name === 'AbortError') {
+      return res.status(504).json({
+        error: "Tempo limite excedido",
+        details: "A análise demorou muito. Tente novamente com uma transcrição menor."
+      });
+    }
+
     res.status(500).json({
       error: "Erro ao processar análise",
       details: error.message

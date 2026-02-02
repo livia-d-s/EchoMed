@@ -528,6 +528,7 @@ export default function App() {
 
   const finalizeConsultation = async () => {
     if (!currentTranscript.trim()) return;
+    if (status === AppStatus.PROCESSING) return; // Prevent double-click
     setStatus(AppStatus.PROCESSING);
     try {
       // Build patient context for AI (supports multiple goals)

@@ -1045,6 +1045,10 @@ function TranscriptionView({
     recognitionRef.current.continuous = true;
     recognitionRef.current.interimResults = true;
     recognitionRef.current.lang = 'pt-BR';
+
+    // Track if we intentionally stopped (pause/finalize) vs browser auto-stop
+    recognitionRef.current._intentionallyStopped = false;
+
     recognitionRef.current.onresult = (event: any) => {
       let f = '', i = '';
       for (let x = event.resultIndex; x < event.results.length; ++x) {
@@ -1054,6 +1058,44 @@ function TranscriptionView({
       if (f) setTranscript((prev: string) => prev + ' ' + f);
       setInterim(i);
     };
+
+    // Auto-restart when browser stops recognition unexpectedly
+    // This is critical for long consultations (1-2 hours)
+    recognitionRef.current.onend = () => {
+      // Only restart if we didn't intentionally stop (pause/finalize)
+      if (recognitionRef.current && !recognitionRef.current._intentionallyStopped) {
+        console.log('🔄 Speech recognition ended unexpectedly, restarting...');
+        try {
+          recognitionRef.current.start();
+        } catch (e) {
+          console.error('Failed to restart speech recognition:', e);
+        }
+      }
+    };
+
+    // Handle errors and restart on recoverable ones
+    recognitionRef.current.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+
+      // Don't restart on intentional stops or fatal errors
+      if (recognitionRef.current._intentionallyStopped) return;
+
+      // Recoverable errors - restart after a brief delay
+      const recoverableErrors = ['network', 'aborted', 'audio-capture', 'no-speech'];
+      if (recoverableErrors.includes(event.error)) {
+        console.log('🔄 Recoverable error, restarting in 500ms...');
+        setTimeout(() => {
+          if (recognitionRef.current && !recognitionRef.current._intentionallyStopped) {
+            try {
+              recognitionRef.current.start();
+            } catch (e) {
+              console.error('Failed to restart after error:', e);
+            }
+          }
+        }, 500);
+      }
+    };
+
     recognitionRef.current.start();
     setRecordingStartTime(Date.now());
     // Only reset accumulated time if starting fresh (not resuming)
@@ -1076,6 +1118,8 @@ function TranscriptionView({
 
   const pauseRecording = () => {
     if (recognitionRef.current) {
+      // Mark as intentionally stopped to prevent auto-restart
+      recognitionRef.current._intentionallyStopped = true;
       recognitionRef.current.stop();
       // Save accumulated time when pausing
       if (recordingStartTime) {
@@ -1090,6 +1134,8 @@ function TranscriptionView({
 
   const handleFinalize = () => {
     if (recognitionRef.current) {
+      // Mark as intentionally stopped to prevent auto-restart
+      recognitionRef.current._intentionallyStopped = true;
       recognitionRef.current.stop();
     }
     // Reset timer state

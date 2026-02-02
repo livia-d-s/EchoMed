@@ -494,21 +494,36 @@ export default function App() {
       }
     }
 
-    const response = await fetch(`${backendUrl}/api/analyze-medical`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        transcript: text + contextInfo,
-        patientContext
-      })
-    });
+    // Add timeout for Render cold start (can take 50+ seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
-    if (!response.ok) {
-      const errData = await response.json();
-      throw new Error(errData.error || "Erro ao processar análise");
+    try {
+      const response = await fetch(`${backendUrl}/api/analyze-medical`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+        body: JSON.stringify({
+          transcript: text + contextInfo,
+          patientContext
+        })
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.error || "Erro ao processar análise");
+      }
+
+      return await response.json();
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error('Tempo limite excedido. O servidor pode estar iniciando, tente novamente.');
+      }
+      throw error;
     }
-
-    return await response.json();
   };
 
   const finalizeConsultation = async () => {

@@ -67,10 +67,10 @@ try {
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'echomed-deploy-app';
 
 const getBackendUrl = () => {
-  // In production (Vercel), use relative URL (empty string)
+  // In production, use Render backend
   // In development, use localhost
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return ''; // Production - use relative URLs
+    return 'https://echomed.onrender.com'; // Production - Render backend
   }
   try {
     const env = (import.meta as any)?.env || {};

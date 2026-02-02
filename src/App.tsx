@@ -574,26 +574,25 @@ export default function App() {
       // Create timeline event
       addEventForPatient(patient.id, eventType, aiResponse, currentTranscript);
 
-      // Also try to save to Firebase if available
-      if (user && firebaseConfig.apiKey && db) {
-        try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'consultations'), {
-            patient: patientName || 'Anônimo',
-            diagnosis: aiResponse.nutritionalAssessment || aiResponse.diagnosis,
-            result: aiResponse,
-            transcript: currentTranscript,
-            createdAt: serverTimestamp(),
-            doctorName: doctorProfile.name
-          });
-        } catch (dbError) {
-          console.error("Failed to save to Firebase:", dbError);
-          console.warn("Analysis completed but not saved to cloud (offline mode)");
-        }
-      }
+      // Update UI immediately (before Firebase which may hang)
       setCurrentResult(aiResponse);
       setView('diagnosis');
       showToast('Análise salva com sucesso');
       localStorage.removeItem('echomed_autosave'); // Clear autosave after successful analysis
+
+      // Also try to save to Firebase if available (non-blocking)
+      if (user && firebaseConfig.apiKey && db) {
+        addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'consultations'), {
+          patient: patientName || 'Anônimo',
+          diagnosis: aiResponse.nutritionalAssessment || aiResponse.diagnosis,
+          result: aiResponse,
+          transcript: currentTranscript,
+          createdAt: serverTimestamp(),
+          doctorName: doctorProfile.name
+        }).catch(dbError => {
+          console.error("Failed to save to Firebase:", dbError);
+        });
+      }
     } catch (error: any) {
       console.error("Erro na análise:", error);
       alert(`Erro na análise: ${error.message}\n\nVerifique se o servidor backend está rodando em ${backendUrl}`);

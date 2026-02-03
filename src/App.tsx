@@ -364,6 +364,13 @@ export default function App() {
     ));
   };
 
+  // Update event result (for diagnosis edits)
+  const updateEventResult = (eventId: string, updatedResult: any) => {
+    setEvents(prev => prev.map(e =>
+      e.id === eventId ? { ...e, result: updatedResult } : e
+    ));
+  };
+
   // Edit patient name
   const editPatient = (patientId: string, newName: string) => {
     const normalizedName = normalizePatientName(newName);
@@ -686,7 +693,7 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
       </main>
 
       {/* Profile Popup */}
@@ -1492,7 +1499,7 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, onBack }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: any) {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
   const [editedConduct, setEditedConduct] = useState('');
@@ -1540,6 +1547,25 @@ function DiagnosisView({ result, patientName, onBack }: any) {
   };
 
   const saveEditing = () => {
+    // Build updated result with edited values
+    if (onSaveResult) {
+      const updatedResult = {
+        ...result,
+        // Update rationale fields
+        clinicalRationale: editedRationale || result.clinicalRationale,
+        rationale: editedRationale || result.rationale,
+        // Update conduct fields
+        nutritionalConduct: editedConduct || result.nutritionalConduct,
+        treatment: editedConduct || result.treatment,
+        // Update conditions
+        possibleAssociatedConditions: editedConditions.length > 0 ? editedConditions : result.possibleAssociatedConditions,
+        possibleDiseases: editedConditions.length > 0 ? editedConditions : result.possibleDiseases,
+        // Update exams
+        recommendedExams: editedExams.length > 0 ? editedExams : result.recommendedExams,
+        exams: editedExams.length > 0 ? editedExams : result.exams,
+      };
+      onSaveResult(updatedResult);
+    }
     setEditingSection(null);
   };
 

@@ -578,8 +578,9 @@ export default function App() {
       const patientEvents = events.filter(e => e.patientId === patient.id);
       const eventType: EventType = patientEvents.length === 0 ? 'initial' : 'followup';
 
-      // Create timeline event
-      addEventForPatient(patient.id, eventType, aiResponse, currentTranscript);
+      // Create timeline event and set it as selected for editing
+      const newEvent = addEventForPatient(patient.id, eventType, aiResponse, currentTranscript);
+      setSelectedEvent(newEvent);
 
       // Update UI immediately (before Firebase which may hang)
       setCurrentResult(aiResponse);

@@ -1584,16 +1584,34 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: a
     setEditedExams([]);
   };
 
-  // Delete item from conditions or exams
+  // Delete item from conditions or exams - auto-saves immediately
   const confirmDeleteItem = () => {
     if (!deleteConfirm) return;
+
+    let newConditionsList = conditions;
+    let newExamsList = exams;
+
     if (deleteConfirm.type === 'condition') {
-      const newConditions = conditions.filter((_: string, i: number) => i !== deleteConfirm.index);
-      setEditedConditions(newConditions);
+      newConditionsList = conditions.filter((_: string, i: number) => i !== deleteConfirm.index);
+      setEditedConditions(newConditionsList);
     } else {
-      const newExams = exams.filter((_: string, i: number) => i !== deleteConfirm.index);
-      setEditedExams(newExams);
+      newExamsList = exams.filter((_: string, i: number) => i !== deleteConfirm.index);
+      setEditedExams(newExamsList);
     }
+
+    // Auto-save the deletion immediately
+    if (onSaveResult) {
+      const updatedResult = {
+        ...result,
+        possibleAssociatedConditions: newConditionsList,
+        possibleDiseases: newConditionsList,
+        recommendedExams: newExamsList,
+        exams: newExamsList,
+      };
+      console.log('🗑️ Auto-saving deletion');
+      onSaveResult(updatedResult);
+    }
+
     setDeleteConfirm(null);
   };
 

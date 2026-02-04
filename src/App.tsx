@@ -226,6 +226,7 @@ export default function App() {
 
   // Save events to localStorage
   useEffect(() => {
+    console.log('💾 Saving events to localStorage, count:', events.length);
     localStorage.setItem('echomed_events', JSON.stringify(events));
   }, [events]);
 
@@ -366,9 +367,14 @@ export default function App() {
 
   // Update event result (for diagnosis edits)
   const updateEventResult = (eventId: string, updatedResult: any) => {
-    setEvents(prev => prev.map(e =>
-      e.id === eventId ? { ...e, result: updatedResult } : e
-    ));
+    console.log('🟡 updateEventResult called', { eventId, updatedResult });
+    setEvents(prev => {
+      const updated = prev.map(e =>
+        e.id === eventId ? { ...e, result: updatedResult } : e
+      );
+      console.log('🟡 Events updated, found match:', prev.some(e => e.id === eventId));
+      return updated;
+    });
   };
 
   // Edit patient name
@@ -694,7 +700,7 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} onSaveResult={(updatedResult: any) => { console.log('🔵 onSaveResult called', { selectedEventId: selectedEvent?.id, updatedResult }); if (selectedEvent?.id) { console.log('🟢 Updating event:', selectedEvent.id); updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } else { console.log('🔴 selectedEvent is null/undefined!'); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
       </main>
 
       {/* Profile Popup */}

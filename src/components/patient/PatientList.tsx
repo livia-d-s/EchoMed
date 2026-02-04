@@ -17,11 +17,12 @@ export function PatientList({ patients, events, onSelectPatient }: PatientListPr
   // Get patient stats helper
   const getPatientStats = (patientId: string) => {
     const patientEvents = events.filter(e => e.patientId === patientId);
+    const consultationEvents = patientEvents.filter(e => e.type !== 'adjustment');
     const sortedEvents = patientEvents.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
     return {
-      eventCount: patientEvents.length,
+      eventCount: consultationEvents.length, // Only count actual consultations, not adjustments
       lastEventDate: sortedEvents[0]?.date,
       allEventDates: patientEvents.map(e => e.date.split('T')[0])
     };

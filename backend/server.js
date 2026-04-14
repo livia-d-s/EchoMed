@@ -1,7 +1,41 @@
 const express = require('express');
 const cors = require('cors');
+const admin = require('firebase-admin');
 const { GoogleGenAI } = require('@google/genai');
 require('dotenv').config();
+
+// Initialize Firebase Admin SDK (for verifying user ID tokens)
+if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
+  console.error("❌ FIREBASE_SERVICE_ACCOUNT env var missing — backend will reject all requests");
+} else {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+    console.log("✅ Firebase Admin initialized");
+  } catch (err) {
+    console.error("❌ Failed to parse FIREBASE_SERVICE_ACCOUNT:", err.message);
+  }
+}
+
+// Middleware: verify Firebase ID Token from Authorization header
+const requireAuth = async (req, res, next) => {
+  try {
+    const header = req.headers.authorization || '';
+    const match = header.match(/^Bearer (.+)$/);
+    if (!match) {
+      return res.status(401).json({ error: 'Missing Authorization header' });
+    }
+    const idToken = match[1];
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    console.error("Auth error:", err.message);
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+};
 
 const app = express();
 
@@ -26,7 +60,7 @@ app.use(express.json({ limit: '50mb' }));
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Endpoint para análise nutricional (EchoMed)
-app.post('/api/analyze-medical', async (req, res) => {
+app.post('/api/analyze-medical', requireAuth, async (req, res) => {
   try {
     const { transcript } = req.body;
 
@@ -130,7 +164,7 @@ sem inventar dados.
 });
 
 // Endpoint legado para nutrição
-app.post('/api/analyze', async (req, res) => {
+app.post('/api/analyze', requireAuth, async (req, res) => {
   try {
     const { audioBase64, textPreview } = req.body;
 

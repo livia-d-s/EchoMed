@@ -15,9 +15,6 @@ import { db } from './firebaseConfig';
 import AuthScreen from './components/AuthScreen';
 import { useAuth } from './context/AuthContext';
 
-// Chaves de apoio - Resolvendo import.meta de forma segura
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'echomed-deploy-app';
-
 const getBackendUrl = () => {
   // In production, use Render backend
   // In development, use localhost
@@ -354,14 +351,10 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
-    // DISABLED: this listener used a shared public collection across all users,
-    // which leaked one user's history into another's session. Re-enable only with
-    // a per-user path like `users/${userId}/consultations`.
-    return;
-    if (!user || !db) return;
+    if (!user?.uid || !db) return;
 
     try {
-      const historyRef = collection(db, 'artifacts', appId, 'public', 'data', 'consultations');
+      const historyRef = collection(db, 'users', user.uid, 'consultations');
       const unsubscribe = onSnapshot(historyRef, (snap) => {
         const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setHistory(data.sort((a:any, b:any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)) as any);
@@ -408,9 +401,16 @@ export default function App() {
     const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout
 
     try {
+      if (!user) {
+        throw new Error("Sessão expirada. Faça login novamente.");
+      }
+      const idToken = await user.getIdToken();
       const response = await fetch(`${backendUrl}/api/analyze-medical`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
         signal: controller.signal,
         body: JSON.stringify({
           transcript: text + contextInfo,
@@ -490,9 +490,9 @@ export default function App() {
       showToast('Análise salva com sucesso');
       localStorage.removeItem('echomed_autosave'); // Clear autosave after successful analysis
 
-      // Also try to save to Firebase if available (non-blocking)
-      if (user && firebaseConfig.apiKey && db) {
-        addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'consultations'), {
+      // Save to Firebase under the user's private subcollection (non-blocking)
+      if (user?.uid && db) {
+        addDoc(collection(db, 'users', user.uid, 'consultations'), {
           patient: patientName || 'Anônimo',
           diagnosis: aiResponse.nutritionalAssessment || aiResponse.diagnosis,
           result: aiResponse,

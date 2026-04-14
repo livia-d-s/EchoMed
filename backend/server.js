@@ -6,7 +6,20 @@ require('dotenv').config();
 const app = express();
 
 // Configurações do Servidor
-app.use(cors());
+const allowedOrigins = [
+  'https://echomed.com.br',
+  'https://www.echomed.com.br',
+  'http://localhost:5173',
+];
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+}));
 app.use(express.json({ limit: '50mb' }));
 
 // Inicializa a Inteligência Artificial do Google

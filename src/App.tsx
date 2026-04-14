@@ -7,61 +7,13 @@ import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingAc
 import { PatientList, PatientPage } from './components/patient';
 
 // Firebase Imports
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from 'firebase/auth';
-import { 
-  getFirestore, doc, setDoc, getDoc, collection, 
-  onSnapshot, addDoc, serverTimestamp 
+import {
+  doc, setDoc, getDoc, collection,
+  onSnapshot, addDoc, serverTimestamp
 } from 'firebase/firestore';
-
-// --- CONFIGURAÇÃO PARA DEPLOY SEGURO ---
-const getFirebaseConfig = () => {
-  // 1. Prioridade: Variáveis da Minha Plataforma (Chat)
-  if (typeof __firebase_config !== 'undefined') {
-    return JSON.parse(__firebase_config);
-  }
-
-  // 2. Vite environment variables (import.meta.env)
-  const env = (import.meta as any).env || {};
-
-  const config = {
-    apiKey: env.VITE_FIREBASE_API_KEY || "",
-    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "",
-    projectId: env.VITE_FIREBASE_PROJECT_ID || "",
-    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "",
-    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-    appId: env.VITE_FIREBASE_APP_ID || ""
-  };
-
-  console.log("🔧 Firebase config loaded:", {
-    hasApiKey: !!config.apiKey,
-    apiKeyPreview: config.apiKey ? config.apiKey.substring(0, 10) + "..." : "MISSING",
-    projectId: config.projectId || "MISSING"
-  });
-
-  return config;
-};
-
-const firebaseConfig = getFirebaseConfig();
-
-// Safe Firebase initialization with error handling
-let app: any = null;
-let auth: any = null;
-let db: any = null;
-let firebaseInitialized = false;
-
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  firebaseInitialized = true;
-  console.log("✅ Firebase initialized successfully");
-} catch (error: any) {
-  console.error("❌ Firebase initialization failed:", error.message);
-  console.warn("🔄 Running in OFFLINE MODE - App will work without cloud sync");
-  console.warn("📖 See FIREBASE_SETUP.md for configuration help");
-  firebaseInitialized = false;
-}
+import { db } from './firebaseConfig';
+import AuthScreen from './components/AuthScreen';
+import { useAuth } from './context/AuthContext';
 
 // Chaves de apoio - Resolvendo import.meta de forma segura
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'echomed-deploy-app';
@@ -108,7 +60,6 @@ const AppStatus = {
 export default function App() {
   const [view, setView] = useState<'transcription' | 'diagnosis' | 'patients' | 'patient'>('transcription');
   const [status, setStatus] = useState(AppStatus.IDLE);
-  const [user, setUser] = useState(null);
 
   // Patient-centric state
   const [patients, setPatients] = useState<Patient[]>(() => {
@@ -393,76 +344,21 @@ export default function App() {
     }
   };
 
-  // --- Auth & Listeners ---
+  // --- Auth from context ---
+  const { user, loading: authLoading, logout } = useAuth();
+  const authReady = !authLoading;
+
+  // Auto-fill profile name from authenticated user on first login
   useEffect(() => {
-    const initAuth = async () => {
-      // Skip auth if Firebase didn't initialize
-      if (!firebaseInitialized || !auth) {
-        console.warn("⚠️ Firebase not initialized - running in OFFLINE MODE");
-        console.warn("📝 The app will work but history won't be saved");
-        return;
-      }
-
-      try {
-        // Debug: Log config status
-        console.log("Firebase config loaded:", {
-          hasApiKey: !!firebaseConfig.apiKey,
-          projectId: firebaseConfig.projectId
-        });
-
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          console.log("Attempting custom token auth...");
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else if (firebaseConfig.apiKey && firebaseConfig.apiKey.length > 20) {
-          console.log("Attempting anonymous auth...");
-          await signInAnonymously(auth);
-          console.log("✅ Anonymous auth successful!");
-        } else {
-          console.warn("⚠️ No valid Firebase API key found - running in OFFLINE MODE");
-          console.warn("📝 History and cloud sync disabled. See FIREBASE_SETUP.md to configure.");
-        }
-      } catch (err: any) {
-        console.error("❌ Firebase Auth Error:", err);
-        console.error("Error code:", err?.code);
-        console.error("Error message:", err?.message);
-
-        // Provide helpful error messages with links
-        if (err?.code === 'auth/operation-not-allowed') {
-          console.error("⚠️ SOLUTION: Enable Anonymous Authentication");
-          console.error("🔗 Go to: https://console.firebase.google.com/project/" + firebaseConfig.projectId + "/authentication/providers");
-          console.error("📋 Steps: Click 'Anonymous' → Toggle 'Enable' → Save");
-        } else if (err?.code === 'auth/api-key-not-valid' || err?.code === 'auth/invalid-api-key') {
-          console.error("⚠️ SOLUTION: Update your Firebase API Key");
-          console.error("🔗 Go to: https://console.firebase.google.com/project/" + firebaseConfig.projectId + "/settings/general");
-          console.error("📋 See FIREBASE_SETUP.md for detailed instructions");
-        }
-
-        console.warn("🔄 Continuing in OFFLINE MODE - history will not be saved");
-      }
-    };
-
-    initAuth();
-
-    // Only set up auth listener if Firebase is properly initialized
-    let unsubscribe = () => {};
-    if (firebaseInitialized && auth) {
-      try {
-        unsubscribe = onAuthStateChanged(auth, (u: any) => {
-          if (u) {
-            console.log("✅ User authenticated:", u.uid);
-            setUser(u);
-          }
-        });
-      } catch (error) {
-        console.error("Failed to set up auth listener:", error);
-      }
-    }
-
-    return () => unsubscribe();
-  }, []);
+    if (!user?.displayName) return;
+    setDoctorProfile((prev: any) => {
+      if (prev.name && prev.name !== 'Nutricionista') return prev;
+      return { ...prev, name: user.displayName };
+    });
+  }, [user]);
 
   useEffect(() => {
-    if (!user || !firebaseConfig.apiKey || !db) return;
+    if (!user || !db) return;
 
     try {
       const historyRef = collection(db, 'artifacts', appId, 'public', 'data', 'consultations');
@@ -615,6 +511,18 @@ export default function App() {
     }
   };
 
+  if (!authReady) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin h-8 w-8 text-blue-600" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <AuthScreen />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100">
       <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 sticky top-0 z-40">
@@ -707,8 +615,17 @@ export default function App() {
       {showProfilePopup && (
         <ProfilePopup
           profile={doctorProfile}
+          userEmail={user?.email}
           onSave={(newProfile: any) => { setDoctorProfile(newProfile); setShowProfilePopup(false); }}
           onClose={() => setShowProfilePopup(false)}
+          onLogout={async () => {
+            try {
+              await logout();
+              setShowProfilePopup(false);
+            } catch (err) {
+              console.error("Logout error:", err);
+            }
+          }}
         />
       )}
 
@@ -725,7 +642,7 @@ export default function App() {
   );
 }
 
-function ProfilePopup({ profile, onSave, onClose }: any) {
+function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
   const [name, setName] = useState(profile.name || '');
   const [specialty, setSpecialty] = useState(profile.specialty || '');
   const [photo, setPhoto] = useState<string | null>(profile.photo);
@@ -847,6 +764,25 @@ function ProfilePopup({ profile, onSave, onClose }: any) {
             Salvar
           </button>
         </div>
+
+        {/* Account Info & Logout */}
+        {(userEmail || onLogout) && (
+          <div className="mt-6 pt-6 border-t border-slate-200">
+            {userEmail && (
+              <p className="text-xs text-slate-400 text-center mb-3">
+                Conectado como <span className="font-semibold text-slate-600">{userEmail}</span>
+              </p>
+            )}
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className="w-full py-3 rounded-xl font-bold text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+              >
+                Sair da conta
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

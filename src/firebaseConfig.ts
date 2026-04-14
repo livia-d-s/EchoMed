@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, signInAnonymously } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Safe environment variable access with fallback
@@ -47,9 +47,4 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-
-export const ensureAnonymousUser = async () => {
-  if (!auth.currentUser) {
-    await signInAnonymously(auth);
-  }
-};
+export const googleProvider = new GoogleAuthProvider();

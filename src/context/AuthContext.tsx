@@ -1,46 +1,98 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { getAuth, signInAnonymously, onAuthStateChanged, User } from "firebase/auth";
-import { initializeApp } from "firebase/app";
-
-const firebaseConfig = {
-  apiKey: (import.meta as any).env?.VITE_FIREBASE_API_KEY || '',
-  authDomain: "echo-med-database.firebaseapp.com",
-  projectId: "echo-med-database",
-};
-
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+import {
+  onAuthStateChanged,
+  signInWithPopup,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut as fbSignOut,
+  updateProfile,
+  User,
+} from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db, googleProvider } from "../firebaseConfig";
 
 type AuthContextType = {
   user: User | null;
   loading: boolean;
+  loginWithGoogle: () => Promise<User>;
+  loginWithEmail: (email: string, password: string) => Promise<User>;
+  registerWithEmail: (email: string, password: string, displayName?: string) => Promise<User>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  loginWithGoogle: async () => { throw new Error("AuthProvider missing"); },
+  loginWithEmail: async () => { throw new Error("AuthProvider missing"); },
+  registerWithEmail: async () => { throw new Error("AuthProvider missing"); },
+  logout: async () => {},
 });
 
-export const AuthProvider = ({ children }: React.ReactNode) => {
+const saveUserToFirestore = async (user: User, extra: Record<string, any> = {}) => {
+  try {
+    await setDoc(
+      doc(db, "users", user.uid),
+      {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        lastLogin: serverTimestamp(),
+        ...extra,
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error("Failed to save user to Firestore:", err);
+  }
+};
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (!firebaseUser) {
-        const result = await signInAnonymously(auth);
-        setUser(result.user);
-      } else {
-        setUser(firebaseUser);
-      }
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
       setLoading(false);
     });
-
     return () => unsub();
   }, []);
 
+  const loginWithGoogle = async () => {
+    const result = await signInWithPopup(auth, googleProvider);
+    await saveUserToFirestore(result.user, { provider: "google" });
+    return result.user;
+  };
+
+  const loginWithEmail = async (email: string, password: string) => {
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    await saveUserToFirestore(result.user, { provider: "password" });
+    return result.user;
+  };
+
+  const registerWithEmail = async (email: string, password: string, displayName?: string) => {
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    if (displayName) {
+      await updateProfile(result.user, { displayName });
+    }
+    await saveUserToFirestore(result.user, {
+      provider: "password",
+      displayName: displayName || result.user.displayName,
+      createdAt: serverTimestamp(),
+    });
+    return result.user;
+  };
+
+  const logout = async () => {
+    await fbSignOut(auth);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider
+      value={{ user, loading, loginWithGoogle, loginWithEmail, registerWithEmail, logout }}
+    >
       {children}
     </AuthContext.Provider>
   );

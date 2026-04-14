@@ -57,74 +57,69 @@ const AppStatus = {
   RESULT: 'result'
 };
 
+const DEFAULT_PROFILE = {
+  name: "Nutricionista",
+  specialty: "Nutrição Clínica",
+  photo: null as string | null,
+  crm: ""
+};
+
+const safeParse = <T,>(raw: string | null, fallback: T): T => {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
+};
+
 export default function App() {
+  // --- Auth from context (must come before user-scoped state effects) ---
+  const { user, loading: authLoading, logout } = useAuth();
+  const authReady = !authLoading;
+  const userId = user?.uid;
+
+  // Build a localStorage key namespaced to the current user
+  const lsKey = (base: string) => userId ? `echomed_${userId}_${base}` : null;
+
   const [view, setView] = useState<'transcription' | 'diagnosis' | 'patients' | 'patient'>('transcription');
   const [status, setStatus] = useState(AppStatus.IDLE);
 
-  // Patient-centric state
-  const [patients, setPatients] = useState<Patient[]>(() => {
-    const saved = localStorage.getItem('echomed_patients');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading patients from localStorage:', e);
-      }
-    }
-    return [];
-  });
-
-  const [events, setEvents] = useState<TimelineEvent[]>(() => {
-    const saved = localStorage.getItem('echomed_events');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading events from localStorage:', e);
-      }
-    }
-    return [];
-  });
-
+  // Patient-centric state — initialized empty; loaded from user-scoped storage in an effect below
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
-  const [doctorProfile, setDoctorProfile] = useState(() => {
-    // Load from localStorage on initial render
-    const saved = localStorage.getItem('echomed_doctor_profile');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading profile from localStorage:', e);
-      }
-    }
-    return {
-      name: "Nutricionista",
-      specialty: "Nutrição Clínica",
-      photo: null as string | null,
-      crm: ""
-    };
-  });
+  const [doctorProfile, setDoctorProfile] = useState<typeof DEFAULT_PROFILE>(DEFAULT_PROFILE);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
 
-  // Save doctor profile to localStorage when it changes
+  // Load all user-scoped data when user changes (login/logout switch)
   useEffect(() => {
-    localStorage.setItem('echomed_doctor_profile', JSON.stringify(doctorProfile));
-  }, [doctorProfile]);
+    if (!userId) {
+      // Logged out → clear everything from memory
+      setPatients([]);
+      setEvents([]);
+      setHistory([]);
+      setDoctorProfile(DEFAULT_PROFILE);
+      setSelectedPatient(null);
+      setSelectedEvent(null);
+      return;
+    }
+    setPatients(safeParse(localStorage.getItem(`echomed_${userId}_patients`), [] as Patient[]));
+    setEvents(safeParse(localStorage.getItem(`echomed_${userId}_events`), [] as TimelineEvent[]));
+    setHistory(safeParse(localStorage.getItem(`echomed_${userId}_consultation_history`), [] as any[]));
+    setDoctorProfile(safeParse(localStorage.getItem(`echomed_${userId}_doctor_profile`), DEFAULT_PROFILE));
+  }, [userId]);
+
+  // Save doctor profile to localStorage when it changes (user-scoped)
+  useEffect(() => {
+    const key = lsKey('doctor_profile');
+    if (!key) return;
+    localStorage.setItem(key, JSON.stringify(doctorProfile));
+  }, [doctorProfile, userId]);
   const [patientName, setPatientName] = useState('');
   const [currentTranscript, setCurrentTranscript] = useState('');
-  const [history, setHistory] = useState(() => {
-    // Load history from localStorage on initial render
-    const saved = localStorage.getItem('echomed_consultation_history');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error('Error loading history from localStorage:', e);
-      }
-    }
-    return [];
-  });
+  const [history, setHistory] = useState<any[]>([]);
   const [currentResult, setCurrentResult] = useState(null);
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: '', visible: false });
 
@@ -140,17 +135,21 @@ export default function App() {
     setTimeout(() => setToast({ message: '', visible: false }), 3000);
   };
 
-  // Save history to localStorage when it changes
+  // Save history to localStorage when it changes (user-scoped)
   useEffect(() => {
+    const key = lsKey('consultation_history');
+    if (!key) return;
     if (history.length > 0) {
-      localStorage.setItem('echomed_consultation_history', JSON.stringify(history));
+      localStorage.setItem(key, JSON.stringify(history));
     }
-  }, [history]);
+  }, [history, userId]);
 
-  // Save patients to localStorage
+  // Save patients to localStorage (user-scoped)
   useEffect(() => {
-    localStorage.setItem('echomed_patients', JSON.stringify(patients));
-  }, [patients]);
+    const key = lsKey('patients');
+    if (!key) return;
+    localStorage.setItem(key, JSON.stringify(patients));
+  }, [patients, userId]);
 
   // Normalize existing patient names (runs once on app load)
   useEffect(() => {
@@ -175,11 +174,12 @@ export default function App() {
     }
   }, []);
 
-  // Save events to localStorage
+  // Save events to localStorage (user-scoped)
   useEffect(() => {
-    console.log('💾 Saving events to localStorage, count:', events.length);
-    localStorage.setItem('echomed_events', JSON.stringify(events));
-  }, [events]);
+    const key = lsKey('events');
+    if (!key) return;
+    localStorage.setItem(key, JSON.stringify(events));
+  }, [events, userId]);
 
   // Migrate existing history to patient-centric format (runs once)
   useEffect(() => {
@@ -344,10 +344,6 @@ export default function App() {
     }
   };
 
-  // --- Auth from context ---
-  const { user, loading: authLoading, logout } = useAuth();
-  const authReady = !authLoading;
-
   // Auto-fill profile name from authenticated user on first login
   useEffect(() => {
     if (!user?.displayName) return;
@@ -358,6 +354,10 @@ export default function App() {
   }, [user]);
 
   useEffect(() => {
+    // DISABLED: this listener used a shared public collection across all users,
+    // which leaked one user's history into another's session. Re-enable only with
+    // a per-user path like `users/${userId}/consultations`.
+    return;
     if (!user || !db) return;
 
     try {

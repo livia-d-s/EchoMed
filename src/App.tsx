@@ -22,7 +22,7 @@ const getBackendUrl = () => {
   // In production, use Render backend
   // In development, use localhost
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
-    return 'https://echomed.onrender.com'; // Production - Render backend
+    return 'https://echomed-p3tr.onrender.com'; // Production - Render backend
   }
   try {
     const env = (import.meta as any)?.env || {};

@@ -52,8 +52,8 @@ export function PatientHeader({
   };
 
   return (
-    <div className="bg-white border-b border-slate-200 -mx-4 md:-mx-8 px-4 md:px-8 py-6 mb-6
-                    sticky top-[73px] z-30 backdrop-blur-sm bg-white/95">
+    <div className="bg-white border-b border-slate-200 -mx-3 md:-mx-8 px-3 md:px-8 py-4 md:py-6 mb-4 md:mb-6
+                    sticky top-[57px] md:top-[73px] z-30 backdrop-blur-sm bg-white/95">
       <div className="max-w-4xl mx-auto">
         {/* Back button */}
         <button
@@ -101,7 +101,7 @@ export function PatientHeader({
                 </div>
               ) : (
                 <div className="flex items-center gap-2">
-                  <h1 className="text-2xl font-black text-slate-900 leading-tight">
+                  <h1 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">
                     {patient.name}
                   </h1>
                   {onEditPatient && (

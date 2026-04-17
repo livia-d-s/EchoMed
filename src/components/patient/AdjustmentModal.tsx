@@ -17,8 +17,8 @@ export function AdjustmentModal({ patientName, onSave, onClose }: AdjustmentModa
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl
-                      animate-in fade-in zoom-in-95 duration-300">
+      <div className="bg-white rounded-2xl md:rounded-3xl p-4 sm:p-6 md:p-8 max-w-lg w-full shadow-2xl
+                      animate-in fade-in zoom-in-95 duration-300 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div className="flex items-center gap-3">

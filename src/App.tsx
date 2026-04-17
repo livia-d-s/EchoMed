@@ -525,38 +525,38 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-blue-100">
-      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-4 sticky top-0 z-40">
+      <nav className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setCurrentTranscript(''); setPatientName(''); setCurrentResult(null); setView('transcription'); }}>
-            <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-200"><Activity size={22} /></div>
+          <div className="flex items-center gap-2 md:gap-3 cursor-pointer" onClick={() => { setCurrentTranscript(''); setPatientName(''); setCurrentResult(null); setView('transcription'); }}>
+            <div className="bg-blue-600 p-2 md:p-2.5 rounded-xl text-white shadow-lg shadow-blue-200"><Activity size={20} /></div>
             <div>
-              <h1 className="font-black text-xl tracking-tight leading-none">EchoMed</h1>
-              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">IA para Nutricionistas</span>
+              <h1 className="font-black text-lg md:text-xl tracking-tight leading-none">EchoMed</h1>
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hidden sm:block">IA para Nutricionistas</span>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-            <div className="hidden md:flex gap-1 bg-slate-100 p-1 rounded-xl">
-              <button onClick={() => { setCurrentTranscript(''); setPatientName(''); setCurrentResult(null); setSelectedEvent(null); setView('transcription'); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${view === 'transcription' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>Consulta</button>
-              <button onClick={() => { setView('patients'); setSelectedPatient(null); }} className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5 ${view === 'patients' || view === 'patient' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>
-                <Users size={14} /> Pacientes
+          <div className="flex items-center gap-3 md:gap-6">
+            <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
+              <button onClick={() => { setCurrentTranscript(''); setPatientName(''); setCurrentResult(null); setSelectedEvent(null); setView('transcription'); }} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all ${view === 'transcription' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>Consulta</button>
+              <button onClick={() => { setView('patients'); setSelectedPatient(null); }} className={`px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm font-bold transition-all flex items-center gap-1.5 ${view === 'patients' || view === 'patient' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'}`}>
+                <Users size={14} /> <span className="hidden sm:inline">Pacientes</span><span className="sm:hidden">Pac.</span>
               </button>
             </div>
             {/* Profile Picture Button */}
             <button
               onClick={() => setShowProfilePopup(true)}
-              className="relative w-10 h-10 rounded-full overflow-hidden border-2 border-slate-200 hover:border-blue-400 transition-colors cursor-pointer bg-slate-100 flex items-center justify-center"
+              className="relative w-9 h-9 md:w-10 md:h-10 rounded-full overflow-hidden border-2 border-slate-200 hover:border-blue-400 transition-colors cursor-pointer bg-slate-100 flex items-center justify-center"
             >
               {doctorProfile.photo ? (
                 <img src={doctorProfile.photo} alt="Foto do perfil" className="w-full h-full object-cover" />
               ) : (
-                <User size={20} className="text-slate-400" />
+                <User size={18} className="text-slate-400" />
               )}
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-6xl mx-auto p-4 md:p-8">
+      <main className="max-w-6xl mx-auto px-3 py-4 md:p-8 pb-24">
         {view === 'transcription' && (
           <TranscriptionView
             status={status} setStatus={setStatus}
@@ -678,7 +678,7 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
       onClick={handleSave}
     >
       <div
-        className="bg-white rounded-3xl p-8 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-300"
+        className="bg-white rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-6">
@@ -1104,7 +1104,7 @@ function TranscriptionView({
             <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 z-10" size={18} />
             <input
               placeholder="Nome Completo do Paciente..."
-              className={`w-full bg-white border rounded-2xl py-4 pl-12 pr-6 outline-none font-bold shadow-sm focus:ring-2 focus:ring-blue-100 transition-all ${
+              className={`w-full bg-white border rounded-2xl py-3 md:py-4 pl-10 md:pl-12 pr-4 md:pr-6 outline-none font-bold shadow-sm focus:ring-2 focus:ring-blue-100 transition-all text-sm md:text-base ${
                 nameWarning ? 'border-amber-300' : 'border-slate-200'
               }`}
               value={patientName}
@@ -1272,45 +1272,45 @@ function TranscriptionView({
         </div>
       )}
 
-      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-xl h-[450px] flex flex-col relative overflow-hidden">
+      <div className="bg-white rounded-2xl md:rounded-[2.5rem] border border-slate-200 shadow-xl h-[320px] sm:h-[380px] md:h-[450px] flex flex-col relative overflow-hidden">
         <div
           ref={transcriptContainerRef}
-          className="h-[320px] p-8 md:p-12 overflow-y-auto scroll-smooth"
+          className="flex-1 p-4 sm:p-6 md:p-12 overflow-y-auto scroll-smooth"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#CBD5E1 transparent' }}
         >
           {transcript || interim ? (
-            <p className="text-2xl font-medium text-slate-800 leading-relaxed">{transcript}<span className="text-blue-400 animate-pulse">{interim}</span></p>
+            <p className="text-lg sm:text-xl md:text-2xl font-medium text-slate-800 leading-relaxed">{transcript}<span className="text-blue-400 animate-pulse">{interim}</span></p>
           ) : (
             <div className="h-full flex flex-col items-center justify-center opacity-20 space-y-4">
-              <Mic size={48} />
-              <p className="font-bold text-center px-8 text-xl">Inicie a consulta para transcrever a voz em tempo real.</p>
+              <Mic size={40} />
+              <p className="font-bold text-center px-4 text-base sm:text-lg md:text-xl">Inicie a consulta para transcrever a voz em tempo real.</p>
             </div>
           )}
         </div>
-        
-        <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex justify-center gap-4">
+
+        <div className="p-4 md:p-8 bg-slate-50/50 border-t border-slate-100 flex justify-center gap-3 md:gap-4">
           {status === AppStatus.IDLE && (
-            <button onClick={startRecording} className="flex items-center gap-3 bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-lg shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
-              <Mic size={24} /> Iniciar Consulta
+            <button onClick={startRecording} className="flex items-center gap-2 md:gap-3 bg-blue-600 text-white px-6 py-3 md:px-10 md:py-5 rounded-2xl md:rounded-[2rem] font-black text-base md:text-lg shadow-xl shadow-blue-500/20 hover:bg-blue-700 transition-all active:scale-95">
+              <Mic size={20} /> Iniciar Consulta
             </button>
           )}
           {status === AppStatus.RECORDING && (
-            <div className="flex gap-4">
-              <button onClick={pauseRecording} className="flex items-center gap-3 bg-amber-500 text-white px-6 py-5 rounded-[2rem] font-black text-lg shadow-lg shadow-amber-200 hover:bg-amber-600 active:scale-95 transition-all">
-                <Pause size={24} /> Pausar
+            <div className="flex gap-3 md:gap-4">
+              <button onClick={pauseRecording} className="flex items-center gap-2 md:gap-3 bg-amber-500 text-white px-4 py-3 md:px-6 md:py-5 rounded-2xl md:rounded-[2rem] font-black text-base md:text-lg shadow-lg shadow-amber-200 hover:bg-amber-600 active:scale-95 transition-all">
+                <Pause size={20} /> Pausar
               </button>
-              <button onClick={handleFinalize} className="flex items-center gap-3 bg-slate-900 text-white px-8 py-5 rounded-[2rem] font-black text-lg shadow-xl active:scale-95 transition-all">
-                <Square size={18} fill="currentColor" /> Finalizar
+              <button onClick={handleFinalize} className="flex items-center gap-2 md:gap-3 bg-slate-900 text-white px-5 py-3 md:px-8 md:py-5 rounded-2xl md:rounded-[2rem] font-black text-base md:text-lg shadow-xl active:scale-95 transition-all">
+                <Square size={16} fill="currentColor" /> Finalizar
               </button>
             </div>
           )}
           {status === AppStatus.PAUSED && (
-            <div className="flex gap-4">
-              <button onClick={resumeRecording} className="flex items-center gap-3 bg-green-500 text-white px-6 py-5 rounded-[2rem] font-black text-lg shadow-lg shadow-green-200 hover:bg-green-600 active:scale-95 transition-all">
-                <Play size={24} fill="currentColor" /> Retomar
+            <div className="flex gap-3 md:gap-4">
+              <button onClick={resumeRecording} className="flex items-center gap-2 md:gap-3 bg-green-500 text-white px-4 py-3 md:px-6 md:py-5 rounded-2xl md:rounded-[2rem] font-black text-base md:text-lg shadow-lg shadow-green-200 hover:bg-green-600 active:scale-95 transition-all">
+                <Play size={20} fill="currentColor" /> Retomar
               </button>
-              <button onClick={handleFinalize} className="flex items-center gap-3 bg-slate-900 text-white px-8 py-5 rounded-[2rem] font-black text-lg shadow-xl active:scale-95 transition-all">
-                <Square size={18} fill="currentColor" /> Finalizar
+              <button onClick={handleFinalize} className="flex items-center gap-2 md:gap-3 bg-slate-900 text-white px-5 py-3 md:px-8 md:py-5 rounded-2xl md:rounded-[2rem] font-black text-base md:text-lg shadow-xl active:scale-95 transition-all">
+                <Square size={16} fill="currentColor" /> Finalizar
               </button>
             </div>
           )}
@@ -1318,9 +1318,9 @@ function TranscriptionView({
 
         {status === AppStatus.PROCESSING && (
           <div className="absolute inset-0 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center z-50">
-            <Loader2 className="animate-spin text-blue-600 mb-4" size={56} />
-            <h2 className="text-2xl font-black">Inteligência EchoMed Ativa</h2>
-            <p className="text-slate-500 font-bold mt-2">Analisando perfil nutricional do paciente...</p>
+            <Loader2 className="animate-spin text-blue-600 mb-4" size={48} />
+            <h2 className="text-xl md:text-2xl font-black">Inteligência EchoMed Ativa</h2>
+            <p className="text-slate-500 font-bold mt-2 text-sm md:text-base text-center px-4">Analisando perfil nutricional do paciente...</p>
           </div>
         )}
       </div>
@@ -1570,7 +1570,7 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: a
         <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm mb-3 hover:gap-3 transition-all">
           <ArrowLeft size={16} /> Voltar
         </button>
-        <h2 className="text-3xl font-black tracking-tight leading-tight mb-2">{title}</h2>
+        <h2 className="text-2xl md:text-3xl font-black tracking-tight leading-tight mb-2">{title}</h2>
         <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-xs tracking-widest">
           <User size={14} /> <span>{patientName}</span>
         </div>

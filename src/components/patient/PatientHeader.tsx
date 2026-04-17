@@ -38,9 +38,14 @@ export function PatientHeader({
     if (e.key === 'Escape') handleCancelEdit();
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (d: any) => {
     try {
-      const date = new Date(dateStr);
+      if (!d) return '';
+      let date: Date;
+      if (d.toDate) date = d.toDate();
+      else if (d.seconds) date = new Date(d.seconds * 1000);
+      else date = new Date(d);
+      if (isNaN(date.getTime())) return '';
       return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',

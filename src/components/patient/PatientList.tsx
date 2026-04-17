@@ -15,16 +15,24 @@ export function PatientList({ patients, events, onSelectPatient }: PatientListPr
   const [searchMode, setSearchMode] = useState<'name' | 'date'>('name');
 
   // Get patient stats helper
+  const toDateString = (d: any): string => {
+    if (!d) return '';
+    if (typeof d === 'string') return d;
+    if (d.toDate) return d.toDate().toISOString(); // Firestore Timestamp
+    if (d.seconds) return new Date(d.seconds * 1000).toISOString();
+    return String(d);
+  };
+
   const getPatientStats = (patientId: string) => {
     const patientEvents = events.filter(e => e.patientId === patientId);
     const consultationEvents = patientEvents.filter(e => e.type !== 'adjustment');
     const sortedEvents = patientEvents.sort(
-      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      (a, b) => new Date(toDateString(b.date)).getTime() - new Date(toDateString(a.date)).getTime()
     );
     return {
-      eventCount: consultationEvents.length, // Only count actual consultations, not adjustments
+      eventCount: consultationEvents.length,
       lastEventDate: sortedEvents[0]?.date,
-      allEventDates: patientEvents.map(e => e.date.split('T')[0])
+      allEventDates: patientEvents.map(e => toDateString(e.date).split('T')[0])
     };
   };
 

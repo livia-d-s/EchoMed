@@ -16,26 +16,31 @@ interface EventGroup {
 }
 
 export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEvent }: PatientTimelineProps) {
+  const toTime = (d: any): number => {
+    if (!d) return 0;
+    if (d.toDate) return d.toDate().getTime();
+    if (d.seconds) return d.seconds * 1000;
+    const parsed = new Date(d).getTime();
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
   // Sort events by date (most recent first)
   const sortedEvents = [...events].sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    (a, b) => toTime(b.date) - toTime(a.date)
   );
 
   // Group adjustments with their parent consultations
-  // An adjustment belongs to the most recent consultation before it
   const groupedEvents = (): (EventGroup | TimelineEvent)[] => {
     const consultations = sortedEvents.filter(e => e.type !== 'adjustment');
     const adjustments = sortedEvents.filter(e => e.type === 'adjustment');
     const groups: (EventGroup | TimelineEvent)[] = [];
 
     consultations.forEach((consultation, index) => {
-      // Find adjustments that belong to this consultation
-      // (adjustments that happened after this consultation but before the next one)
-      const nextConsultation = consultations[index - 1]; // Previous in sorted order = next in time
+      const nextConsultation = consultations[index - 1];
       const relatedAdjustments = adjustments.filter(adj => {
-        const adjDate = new Date(adj.date).getTime();
-        const consultDate = new Date(consultation.date).getTime();
-        const nextDate = nextConsultation ? new Date(nextConsultation.date).getTime() : Infinity;
+        const adjDate = toTime(adj.date);
+        const consultDate = toTime(consultation.date);
+        const nextDate = nextConsultation ? toTime(nextConsultation.date) : Infinity;
         return adjDate >= consultDate && adjDate < nextDate;
       });
 
@@ -43,7 +48,7 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
         groups.push({
           consultation,
           adjustments: relatedAdjustments.sort((a, b) =>
-            new Date(b.date).getTime() - new Date(a.date).getTime()
+            toTime(b.date) - toTime(a.date)
           )
         });
       } else {
@@ -51,11 +56,10 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
       }
     });
 
-    // Handle orphan adjustments (before any consultation)
     const orphanAdjustments = adjustments.filter(adj => {
-      const adjDate = new Date(adj.date).getTime();
+      const adjDate = toTime(adj.date);
       const firstConsultation = consultations[consultations.length - 1];
-      return firstConsultation && adjDate < new Date(firstConsultation.date).getTime();
+      return firstConsultation && adjDate < toTime(firstConsultation.date);
     });
     orphanAdjustments.forEach(adj => groups.push(adj));
 

@@ -12,9 +12,14 @@ interface PatientCardProps {
 export function PatientCard({ patient, eventCount, lastEventDate, onClick }: PatientCardProps) {
   const initial = patient.name.charAt(0).toUpperCase();
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (d: any) => {
     try {
-      const date = new Date(dateStr);
+      let date: Date;
+      if (!d) return '';
+      if (d.toDate) date = d.toDate();
+      else if (d.seconds) date = new Date(d.seconds * 1000);
+      else date = new Date(d);
+      if (isNaN(date.getTime())) return '';
       return date.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: '2-digit',

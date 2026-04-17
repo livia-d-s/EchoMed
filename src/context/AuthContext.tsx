@@ -2,6 +2,8 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import {
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as fbSignOut,
@@ -53,6 +55,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Handle redirect result (for mobile Google login)
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (result?.user) {
+          await saveUserToFirestore(result.user, { provider: "google" });
+        }
+      })
+      .catch((err) => console.error("Redirect result error:", err));
+
     const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setLoading(false);
@@ -60,7 +71,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsub();
   }, []);
 
+  const isMobile = () =>
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
   const loginWithGoogle = async () => {
+    if (isMobile()) {
+      await signInWithRedirect(auth, googleProvider);
+      return null as unknown as User;
+    }
     const result = await signInWithPopup(auth, googleProvider);
     await saveUserToFirestore(result.user, { provider: "google" });
     return result.user;

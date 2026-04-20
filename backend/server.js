@@ -37,7 +37,18 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
+const rateLimit = require('express-rate-limit');
+
 const app = express();
+
+// Rate limiting: max 10 requests per minute per IP
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Muitas requisições. Tente novamente em 1 minuto.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Configurações do Servidor
 const allowedOrigins = [
@@ -60,7 +71,7 @@ app.use(express.json({ limit: '50mb' }));
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Endpoint para análise nutricional (EchoMed)
-app.post('/api/analyze-medical', requireAuth, async (req, res) => {
+app.post('/api/analyze-medical', apiLimiter, requireAuth, async (req, res) => {
   try {
     const { transcript } = req.body;
 
@@ -164,7 +175,7 @@ sem inventar dados.
 });
 
 // Endpoint legado para nutrição
-app.post('/api/analyze', requireAuth, async (req, res) => {
+app.post('/api/analyze', apiLimiter, requireAuth, async (req, res) => {
   try {
     const { audioBase64, textPreview } = req.body;
 

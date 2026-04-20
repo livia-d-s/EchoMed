@@ -75,6 +75,7 @@ export interface Patient {
   goalCustom?: string;           // If goal is 'outro'
   trainingRoutine?: TrainingActivity[];
   isFirstConsultation?: boolean; // Tracks if first consultation was done
+  highlights?: string[];         // AI-extracted key patient insights (persists across consultations)
 }
 
 export type EventType = 'initial' | 'followup' | 'adjustment';

@@ -93,7 +93,6 @@ export default function App() {
   // Load all user-scoped data when user changes (login/logout switch)
   useEffect(() => {
     if (!userId) {
-      // Logged out → clear everything from memory
       setPatients([]);
       setEvents([]);
       setHistory([]);
@@ -102,17 +101,56 @@ export default function App() {
       setSelectedEvent(null);
       return;
     }
+
+    // 1. Instant load from localStorage cache
     setPatients(safeParse(localStorage.getItem(`echomed_${userId}_patients`), [] as Patient[]));
     setEvents(safeParse(localStorage.getItem(`echomed_${userId}_events`), [] as TimelineEvent[]));
     setHistory(safeParse(localStorage.getItem(`echomed_${userId}_consultation_history`), [] as any[]));
     setDoctorProfile(safeParse(localStorage.getItem(`echomed_${userId}_doctor_profile`), DEFAULT_PROFILE));
+
+    // 2. Then load from Firestore (overrides localStorage if exists)
+    if (!db) return;
+    const loadFromFirestore = async () => {
+      try {
+        const [patientsDoc, eventsDoc, profileDoc] = await Promise.all([
+          getDoc(doc(db, 'users', userId, 'appData', 'patients')),
+          getDoc(doc(db, 'users', userId, 'appData', 'events')),
+          getDoc(doc(db, 'users', userId, 'appData', 'profile')),
+        ]);
+
+        if (patientsDoc.exists()) {
+          const items = patientsDoc.data().items || [];
+          setPatients(items);
+          localStorage.setItem(`echomed_${userId}_patients`, JSON.stringify(items));
+        }
+        if (eventsDoc.exists()) {
+          const items = eventsDoc.data().items || [];
+          setEvents(items);
+          localStorage.setItem(`echomed_${userId}_events`, JSON.stringify(items));
+        }
+        if (profileDoc.exists()) {
+          const data = profileDoc.data();
+          const profile = { ...DEFAULT_PROFILE, ...data };
+          setDoctorProfile(profile);
+          localStorage.setItem(`echomed_${userId}_doctor_profile`, JSON.stringify(profile));
+        }
+      } catch (err) {
+        console.error('Failed to load from Firestore (using localStorage cache):', err);
+      }
+    };
+    loadFromFirestore();
   }, [userId]);
 
-  // Save doctor profile to localStorage when it changes (user-scoped)
+  // Save doctor profile (localStorage cache + Firestore)
   useEffect(() => {
     const key = lsKey('doctor_profile');
-    if (!key) return;
+    if (!key || !userId) return;
     localStorage.setItem(key, JSON.stringify(doctorProfile));
+    if (db) {
+      const { photo, ...profileWithoutPhoto } = doctorProfile;
+      setDoc(doc(db, 'users', userId, 'appData', 'profile'), profileWithoutPhoto, { merge: true })
+        .catch(err => console.error('Failed to save profile to Firestore:', err));
+    }
   }, [doctorProfile, userId]);
   const [patientName, setPatientName] = useState('');
   const [currentTranscript, setCurrentTranscript] = useState('');
@@ -141,11 +179,15 @@ export default function App() {
     }
   }, [history, userId]);
 
-  // Save patients to localStorage (user-scoped)
+  // Save patients (localStorage cache + Firestore)
   useEffect(() => {
     const key = lsKey('patients');
-    if (!key) return;
+    if (!key || !userId) return;
     localStorage.setItem(key, JSON.stringify(patients));
+    if (db && patients.length > 0) {
+      setDoc(doc(db, 'users', userId, 'appData', 'patients'), { items: patients })
+        .catch(err => console.error('Failed to save patients to Firestore:', err));
+    }
   }, [patients, userId]);
 
   // Normalize existing patient names (runs once on app load)
@@ -171,11 +213,15 @@ export default function App() {
     }
   }, []);
 
-  // Save events to localStorage (user-scoped)
+  // Save events (localStorage cache + Firestore)
   useEffect(() => {
     const key = lsKey('events');
-    if (!key) return;
+    if (!key || !userId) return;
     localStorage.setItem(key, JSON.stringify(events));
+    if (db && events.length > 0) {
+      setDoc(doc(db, 'users', userId, 'appData', 'events'), { items: events })
+        .catch(err => console.error('Failed to save events to Firestore:', err));
+    }
   }, [events, userId]);
 
   // Migrate existing history to patient-centric format (runs once)
@@ -488,7 +534,9 @@ export default function App() {
       setCurrentResult(aiResponse);
       setView('diagnosis');
       showToast('Análise salva com sucesso');
-      localStorage.removeItem('echomed_autosave'); // Clear autosave after successful analysis
+      // Clear autosave after successful analysis
+      const asKey = lsKey('autosave');
+      if (asKey) localStorage.removeItem(asKey);
 
       // Save to Firebase under the user's private subcollection (non-blocking)
       if (user?.uid && db) {
@@ -559,6 +607,7 @@ export default function App() {
       <main className="max-w-6xl mx-auto px-3 py-4 md:p-8 pb-24">
         {view === 'transcription' && (
           <TranscriptionView
+            autosaveKey={userId ? `echomed_${userId}_autosave` : null}
             status={status} setStatus={setStatus}
             patientName={patientName} setPatientName={setPatientName}
             transcript={currentTranscript} setTranscript={setCurrentTranscript}
@@ -789,7 +838,7 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
 }
 
 function TranscriptionView({
-  status, setStatus, patientName, setPatientName, transcript, setTranscript, onFinalize, patients, events,
+  autosaveKey, status, setStatus, patientName, setPatientName, transcript, setTranscript, onFinalize, patients, events,
   patientGoals, setPatientGoals, patientGoalCustom, setPatientGoalCustom,
   patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation
 }: any) {
@@ -908,37 +957,39 @@ function TranscriptionView({
     p.name.toLowerCase() === patientName.trim().toLowerCase()
   );
 
-  // Auto-save transcript to localStorage
+  // Auto-save transcript to localStorage (user-scoped)
   useEffect(() => {
+    if (!autosaveKey) return;
     if (transcript && patientName) {
       const autoSaveData = { patientName, transcript, timestamp: Date.now() };
-      localStorage.setItem('echomed_autosave', JSON.stringify(autoSaveData));
+      localStorage.setItem(autosaveKey, JSON.stringify(autoSaveData));
       setAutoSaveIndicator(true);
       const timer = setTimeout(() => setAutoSaveIndicator(false), 1500);
       return () => clearTimeout(timer);
     }
-  }, [transcript, patientName]);
+  }, [transcript, patientName, autosaveKey]);
 
-  // Restore auto-saved data on mount
+  // Restore auto-saved data on mount (user-scoped, max 2h30 old)
   useEffect(() => {
-    const saved = localStorage.getItem('echomed_autosave');
+    if (!autosaveKey) return;
+    const saved = localStorage.getItem(autosaveKey);
     if (saved && !transcript) {
       try {
         const { patientName: savedName, transcript: savedTranscript, timestamp } = JSON.parse(saved);
-        // Only restore if less than 1 hour old
-        if (Date.now() - timestamp < 3600000 && savedTranscript) {
+        const MAX_AGE = 2.5 * 60 * 60 * 1000; // 2h30
+        if (Date.now() - timestamp < MAX_AGE && savedTranscript) {
           if (window.confirm('Há uma transcrição não finalizada. Deseja restaurar?')) {
             setPatientName(savedName || '');
             setTranscript(savedTranscript);
           } else {
-            localStorage.removeItem('echomed_autosave');
+            localStorage.removeItem(autosaveKey);
           }
         }
       } catch (e) {
         console.error('Error restoring autosave:', e);
       }
     }
-  }, []);
+  }, [autosaveKey]);
 
   // Auto-scroll to bottom when transcript changes (teleprompter effect)
   useEffect(() => {

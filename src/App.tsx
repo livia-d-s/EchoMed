@@ -333,14 +333,15 @@ export default function App() {
     return newEvent;
   };
 
-  // Add adjustment for patient
-  const addAdjustmentForPatient = (patientId: string, note: string) => {
+  // Add adjustment/observation for patient, linked to a specific consultation
+  const addAdjustmentForPatient = (patientId: string, note: string, parentEventId?: string) => {
     const newEvent: TimelineEvent = {
       id: `event_${Date.now()}`,
       patientId,
       type: 'adjustment',
       date: new Date().toISOString(),
       adjustmentNote: note,
+      parentEventId,
       doctorName: doctorProfile.name,
       createdAt: new Date().toISOString()
     };

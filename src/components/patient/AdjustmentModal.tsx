@@ -1,18 +1,41 @@
 import React, { useState } from 'react';
-import { Sliders, X } from 'lucide-react';
+import { Sliders, X, ChevronDown } from 'lucide-react';
+import { TimelineEvent } from '../../../types';
 
 interface AdjustmentModalProps {
   patientName: string;
-  onSave: (note: string) => void;
+  consultations: TimelineEvent[];
+  onSave: (note: string, parentEventId?: string) => void;
   onClose: () => void;
 }
 
-export function AdjustmentModal({ patientName, onSave, onClose }: AdjustmentModalProps) {
+const formatDate = (d: any) => {
+  try {
+    if (!d) return '';
+    let date: Date;
+    if (d.toDate) date = d.toDate();
+    else if (d.seconds) date = new Date(d.seconds * 1000);
+    else date = new Date(d);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
+  } catch {
+    return '';
+  }
+};
+
+export function AdjustmentModal({ patientName, consultations, onSave, onClose }: AdjustmentModalProps) {
   const [note, setNote] = useState('');
+  const [selectedConsultationId, setSelectedConsultationId] = useState(
+    consultations.length > 0 ? consultations[0].id : ''
+  );
 
   const handleSave = () => {
     if (!note.trim()) return;
-    onSave(note.trim());
+    onSave(note.trim(), selectedConsultationId || undefined);
   };
 
   return (
@@ -26,7 +49,7 @@ export function AdjustmentModal({ patientName, onSave, onClose }: AdjustmentModa
               <Sliders size={24} className="text-amber-600" />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900">Ajuste de Plano</h3>
+              <h3 className="text-xl font-black text-slate-900">Observação</h3>
               <p className="text-slate-500 text-sm">{patientName}</p>
             </div>
           </div>
@@ -40,9 +63,34 @@ export function AdjustmentModal({ patientName, onSave, onClose }: AdjustmentModa
 
         {/* Form */}
         <div className="space-y-4">
+          {/* Consultation selector */}
+          {consultations.length > 0 && (
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Consulta referente
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedConsultationId}
+                  onChange={(e) => setSelectedConsultationId(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 pr-10
+                             outline-none font-medium focus:ring-2 focus:ring-amber-100
+                             focus:border-amber-300 transition-all appearance-none cursor-pointer"
+                >
+                  {consultations.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.type === 'initial' ? 'Consulta inicial' : 'Retorno'} — {formatDate(c.date)}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-              Descrição do Ajuste
+              Descrição da Observação
             </label>
             <textarea
               value={note}
@@ -57,7 +105,7 @@ export function AdjustmentModal({ patientName, onSave, onClose }: AdjustmentModa
           </div>
 
           <p className="text-xs text-slate-400">
-            Descreva as alterações realizadas no plano nutricional do paciente.
+            Descreva as alterações ou observações sobre esta consulta do paciente.
           </p>
         </div>
 
@@ -77,7 +125,7 @@ export function AdjustmentModal({ patientName, onSave, onClose }: AdjustmentModa
                        hover:bg-amber-600 transition-colors disabled:opacity-50
                        disabled:cursor-not-allowed"
           >
-            Salvar Ajuste
+            Salvar Observação
           </button>
         </div>
       </div>

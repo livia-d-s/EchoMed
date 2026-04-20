@@ -531,6 +531,23 @@ export default function App() {
       const newEvent = addEventForPatient(patient.id, eventType, aiResponse, currentTranscript);
       setSelectedEvent(newEvent);
 
+      // Merge AI-extracted highlights into patient (accumulate across consultations)
+      if (aiResponse.patientHighlights && aiResponse.patientHighlights.length > 0) {
+        const existingHighlights = patient.highlights || [];
+        const newHighlights = aiResponse.patientHighlights.filter(
+          (h: string) => !existingHighlights.some(
+            (eh: string) => eh.toLowerCase() === h.toLowerCase()
+          )
+        );
+        if (newHighlights.length > 0) {
+          setPatients(prev => prev.map(p =>
+            p.id === patient.id
+              ? { ...p, highlights: [...existingHighlights, ...newHighlights] }
+              : p
+          ));
+        }
+      }
+
       // Update UI immediately (before Firebase which may hang)
       setCurrentResult(aiResponse);
       setView('diagnosis');
@@ -648,6 +665,11 @@ export default function App() {
             onDeleteEvent={deleteEvent}
             onEditEvent={editEventNote}
             onEditPatient={editPatient}
+            onUpdateHighlights={(patientId: string, highlights: string[]) => {
+              setPatients(prev => prev.map(p =>
+                p.id === patientId ? { ...p, highlights } : p
+              ));
+            }}
             onEventClick={(event) => {
               setSelectedEvent(event);
               if (event.result) {

@@ -107,8 +107,16 @@ sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
   "clinicalRationale": "justificativa detalhada considerando alimentação, comportamento, rotina, emoções, sono, estresse e treino",
   "possibleAssociatedConditions": ["condição ou desequilíbrio possível 1", "condição ou desequilíbrio possível 2"],
   "recommendedExams": ["exame laboratorial ou avaliação complementar 1", "exame 2"],
-  "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada de forma humanizada"
+  "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada de forma humanizada",
+  "patientHighlights": ["frase curta sobre o paciente 1", "frase curta 2"]
 }
+
+O campo "patientHighlights" deve conter pontos-chave extraídos da conversa que sejam
+relevantes para consultas futuras. Exemplos: preferências alimentares ("Não gosta de brócolis"),
+restrições ("Intolerante à lactose"), rotina ("Treina musculação 5x/semana"),
+comportamento ("Come por ansiedade à noite"), contexto ("Trabalha em turnos noturnos"),
+sono ("Dorme em média 5h por noite"). Cada item deve ser uma frase curta e objetiva (máximo 8 palavras).
+Extraia apenas o que foi mencionado na transcrição, não invente.
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

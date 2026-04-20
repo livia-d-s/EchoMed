@@ -14,6 +14,7 @@ interface PatientPageProps {
   onDeleteEvent?: (eventId: string) => void;
   onEditEvent?: (eventId: string, newNote: string) => void;
   onEditPatient?: (patientId: string, newName: string) => void;
+  onUpdateHighlights?: (patientId: string, highlights: string[]) => void;
 }
 
 export function PatientPage({
@@ -25,7 +26,8 @@ export function PatientPage({
   onEventClick,
   onDeleteEvent,
   onEditEvent,
-  onEditPatient
+  onEditPatient,
+  onUpdateHighlights
 }: PatientPageProps) {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
 
@@ -59,6 +61,7 @@ export function PatientPage({
         onNewConsultation={() => onNewConsultation(patient)}
         onNewAdjustment={() => setShowAdjustmentModal(true)}
         onEditPatient={onEditPatient}
+        onUpdateHighlights={onUpdateHighlights}
       />
 
       <div className="max-w-4xl mx-auto">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Patient, TimelineEvent } from '../../../types';
 import { PatientHeader } from './PatientHeader';
 import { PatientTimeline } from './PatientTimeline';
@@ -9,7 +9,7 @@ interface PatientPageProps {
   events: TimelineEvent[];
   onBack: () => void;
   onNewConsultation: (patient: Patient) => void;
-  onAddAdjustment: (patientId: string, note: string) => void;
+  onAddAdjustment: (patientId: string, note: string, parentEventId?: string) => void;
   onEventClick: (event: TimelineEvent) => void;
   onDeleteEvent?: (eventId: string) => void;
   onEditEvent?: (eventId: string, newNote: string) => void;
@@ -32,8 +32,22 @@ export function PatientPage({
   // Filter events for this patient
   const patientEvents = events.filter(e => e.patientId === patient.id);
 
-  const handleSaveAdjustment = (note: string) => {
-    onAddAdjustment(patient.id, note);
+  // Get only consultations (not adjustments) for the selector, most recent first
+  const consultations = useMemo(() => {
+    const toTime = (d: any): number => {
+      if (!d) return 0;
+      if (d.toDate) return d.toDate().getTime();
+      if (d.seconds) return d.seconds * 1000;
+      const parsed = new Date(d).getTime();
+      return isNaN(parsed) ? 0 : parsed;
+    };
+    return patientEvents
+      .filter(e => e.type !== 'adjustment')
+      .sort((a, b) => toTime(b.date) - toTime(a.date));
+  }, [patientEvents]);
+
+  const handleSaveAdjustment = (note: string, parentEventId?: string) => {
+    onAddAdjustment(patient.id, note, parentEventId);
     setShowAdjustmentModal(false);
   };
 
@@ -60,6 +74,7 @@ export function PatientPage({
       {showAdjustmentModal && (
         <AdjustmentModal
           patientName={patient.name}
+          consultations={consultations}
           onSave={handleSaveAdjustment}
           onClose={() => setShowAdjustmentModal(false)}
         />

@@ -91,6 +91,7 @@ export interface TimelineEvent {
 
   // Adjustment data (for plan changes)
   adjustmentNote?: string;
+  parentEventId?: string; // Links adjustment to a specific consultation
   previousPlan?: string;
   newPlan?: string;
 

@@ -30,6 +30,7 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
   );
 
   // Group adjustments with their parent consultations
+  // Uses parentEventId if available, falls back to date-based grouping for old data
   const groupedEvents = (): (EventGroup | TimelineEvent)[] => {
     const consultations = sortedEvents.filter(e => e.type !== 'adjustment');
     const adjustments = sortedEvents.filter(e => e.type === 'adjustment');
@@ -38,6 +39,11 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
     consultations.forEach((consultation, index) => {
       const nextConsultation = consultations[index - 1];
       const relatedAdjustments = adjustments.filter(adj => {
+        // Prefer explicit link via parentEventId
+        if (adj.parentEventId) {
+          return adj.parentEventId === consultation.id;
+        }
+        // Fallback: date-based grouping for old data without parentEventId
         const adjDate = toTime(adj.date);
         const consultDate = toTime(consultation.date);
         const nextDate = nextConsultation ? toTime(nextConsultation.date) : Infinity;
@@ -56,7 +62,11 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
       }
     });
 
+    // Handle orphan adjustments (no parentEventId and before any consultation)
     const orphanAdjustments = adjustments.filter(adj => {
+      if (adj.parentEventId) {
+        return !consultations.some(c => c.id === adj.parentEventId);
+      }
       const adjDate = toTime(adj.date);
       const firstConsultation = consultations[consultations.length - 1];
       return firstConsultation && adjDate < toTime(firstConsultation.date);

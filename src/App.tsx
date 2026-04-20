@@ -469,7 +469,8 @@ export default function App() {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error || "Erro ao processar análise");
+        const detail = errData.details ? `: ${errData.details}` : '';
+        throw new Error((errData.error || "Erro ao processar análise") + detail);
       }
 
       return await response.json();

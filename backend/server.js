@@ -108,15 +108,14 @@ sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
   "possibleAssociatedConditions": ["condição ou desequilíbrio possível 1", "condição ou desequilíbrio possível 2"],
   "recommendedExams": ["exame laboratorial ou avaliação complementar 1", "exame 2"],
   "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada de forma humanizada",
-  "patientHighlights": ["frase curta sobre o paciente 1", "frase curta 2"]
+  "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"]
 }
 
-O campo "patientHighlights" deve conter pontos-chave extraídos da conversa que sejam
-relevantes para consultas futuras. Exemplos: preferências alimentares ("Não gosta de brócolis"),
-restrições ("Intolerante à lactose"), rotina ("Treina musculação 5x/semana"),
-comportamento ("Come por ansiedade à noite"), contexto ("Trabalha em turnos noturnos"),
-sono ("Dorme em média 5h por noite"). Cada item deve ser uma frase curta e objetiva (máximo 8 palavras).
-Extraia apenas o que foi mencionado na transcrição, não invente.
+Regras para o campo patientHighlights:
+- Extraia pontos-chave mencionados pelo paciente na conversa
+- Exemplos válidos: "Não gosta de carne vermelha", "Treina tênis 4x/semana", "Dorme 5h por noite", "Intolerante à lactose", "Come por ansiedade"
+- Máximo 8 palavras por item
+- Extraia apenas o que foi dito, não invente
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

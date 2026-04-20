@@ -669,6 +669,10 @@ export default function App() {
               setPatients(prev => prev.map(p =>
                 p.id === patientId ? { ...p, highlights } : p
               ));
+              // Keep selectedPatient in sync
+              if (selectedPatient?.id === patientId) {
+                setSelectedPatient(prev => prev ? { ...prev, highlights } : null);
+              }
             }}
             onEventClick={(event) => {
               setSelectedEvent(event);

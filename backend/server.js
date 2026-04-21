@@ -134,7 +134,8 @@ sem inventar dados.
         }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 2048  // Increased for Gemini 2.5 Pro thinking mode
+          maxOutputTokens: 8192,
+          responseMimeType: "application/json"
         }
       })
     });

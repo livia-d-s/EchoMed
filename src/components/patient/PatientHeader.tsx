@@ -161,7 +161,7 @@ export function PatientHeader({
                 Paciente desde {formatDate(patient.createdAt)}
               </p>
               {/* Goal and Training Display */}
-              {(patient.goals?.length || patient.goal || patient.trainingRoutine?.length) && (
+              {Boolean(patient.goals?.length || patient.goal || patient.trainingRoutine?.length) && (
                 <div className="flex flex-wrap items-center gap-2 mt-2">
                   {(patient.goals?.length || patient.goal) && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700">

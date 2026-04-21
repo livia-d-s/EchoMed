@@ -134,7 +134,7 @@ sem inventar dados.
         }],
         generationConfig: {
           temperature: 0.7,
-          maxOutputTokens: 8192,
+          maxOutputTokens: 16384,
           responseMimeType: "application/json"
         }
       })

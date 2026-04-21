@@ -54,11 +54,32 @@ const AppStatus = {
   RESULT: 'result'
 };
 
-const DEFAULT_PROFILE = {
+type AnalysisTone = 'humanizado' | 'sistemico' | 'direto';
+
+type DoctorProfileType = {
+  name: string;
+  specialty: string;
+  photo: string | null;
+  crm: string;
+  preferences?: {
+    showConduct: boolean;
+    showAttention: boolean;
+    showExams: boolean;
+    tone: AnalysisTone;
+  };
+};
+
+const DEFAULT_PROFILE: DoctorProfileType = {
   name: "Nutricionista",
   specialty: "Nutrição Clínica",
-  photo: null as string | null,
-  crm: ""
+  photo: null,
+  crm: "",
+  preferences: {
+    showConduct: true,
+    showAttention: true,
+    showExams: true,
+    tone: 'humanizado',
+  },
 };
 
 const safeParse = <T,>(raw: string | null, fallback: T): T => {
@@ -87,7 +108,7 @@ export default function App() {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
-  const [doctorProfile, setDoctorProfile] = useState<typeof DEFAULT_PROFILE>(DEFAULT_PROFILE);
+  const [doctorProfile, setDoctorProfile] = useState<DoctorProfileType>(DEFAULT_PROFILE);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
 
   // Load all user-scoped data when user changes (login/logout switch)
@@ -461,7 +482,8 @@ export default function App() {
         signal: controller.signal,
         body: JSON.stringify({
           transcript: text + contextInfo,
-          patientContext
+          patientContext,
+          tone: doctorProfile.preferences?.tone || 'humanizado'
         })
       });
 
@@ -685,7 +707,7 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} onSaveResult={(updatedResult: any) => { console.log('🔵 onSaveResult called', { selectedEventId: selectedEvent?.id, updatedResult }); if (selectedEvent?.id) { console.log('🟢 Updating event:', selectedEvent.id); updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } else { console.log('🔴 selectedEvent is null/undefined!'); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
       </main>
 
       {/* Profile Popup */}
@@ -723,6 +745,9 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
   const [name, setName] = useState(profile.name || '');
   const [specialty, setSpecialty] = useState(profile.specialty || '');
   const [photo, setPhoto] = useState<string | null>(profile.photo);
+  const defaultPrefs = { showConduct: true, showAttention: true, showExams: true, tone: 'humanizado' };
+  const [prefs, setPrefs] = useState(profile.preferences || defaultPrefs);
+  const [tab, setTab] = useState<'profile' | 'preferences'>('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -745,8 +770,13 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
       ...profile,
       name: name.trim() || 'Nutricionista',
       specialty: specialty.trim() || 'Nutrição Clínica',
-      photo
+      photo,
+      preferences: prefs,
     });
+  };
+
+  const togglePref = (key: 'showConduct' | 'showAttention' | 'showExams') => {
+    setPrefs({ ...prefs, [key]: !prefs[key] });
   };
 
   return (
@@ -758,10 +788,98 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
         className="bg-white rounded-2xl md:rounded-3xl p-5 sm:p-6 md:p-8 max-w-md w-full mx-4 shadow-2xl animate-in fade-in zoom-in-95 duration-300"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="text-center mb-6">
-          <h3 className="text-2xl font-black text-slate-900">Meu Perfil</h3>
-          <p className="text-slate-500 mt-1">Configure sua foto e informações</p>
+        <div className="text-center mb-4">
+          <h3 className="text-2xl font-black text-slate-900">
+            {tab === 'profile' ? 'Meu Perfil' : 'Preferências'}
+          </h3>
+          <p className="text-slate-500 mt-1 text-sm">
+            {tab === 'profile' ? 'Configure sua foto e informações' : 'Como a análise aparece para você'}
+          </p>
         </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-5">
+          <button
+            onClick={() => setTab('profile')}
+            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+              tab === 'profile' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Perfil
+          </button>
+          <button
+            onClick={() => setTab('preferences')}
+            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+              tab === 'preferences' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Preferências
+          </button>
+        </div>
+
+        {tab === 'preferences' ? (
+          <div className="space-y-5">
+            {/* Sections to show */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                Seções na análise
+              </label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl opacity-60">
+                  <span className="text-sm font-medium text-slate-700">Racional Clínico</span>
+                  <span className="text-xs text-slate-400">Sempre visível</span>
+                </div>
+                {[
+                  { key: 'showConduct', label: 'Conduta Nutricional' },
+                  { key: 'showAttention', label: 'Pontos de Atenção' },
+                  { key: 'showExams', label: 'Exames Sugeridos' },
+                ].map(({ key, label }) => (
+                  <label key={key} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-colors">
+                    <span className="text-sm font-medium text-slate-700">{label}</span>
+                    <input
+                      type="checkbox"
+                      checked={!!prefs[key as 'showConduct' | 'showAttention' | 'showExams']}
+                      onChange={() => togglePref(key as 'showConduct' | 'showAttention' | 'showExams')}
+                      className="w-5 h-5 rounded cursor-pointer accent-blue-600"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Tone */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                Tom da análise
+              </label>
+              <div className="space-y-2">
+                {[
+                  { value: 'humanizado', label: 'Humanizado', desc: 'Acolhedor e empático' },
+                  { value: 'sistemico', label: 'Sistêmico / Integrativo', desc: 'Conexões biopsicossociais' },
+                  { value: 'direto', label: 'Direto', desc: 'Objetivo e prático' },
+                ].map(({ value, label, desc }) => (
+                  <label key={value} className={`flex items-start gap-3 p-3 rounded-xl cursor-pointer border-2 transition-all ${
+                    prefs.tone === value
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-100 bg-slate-50 hover:border-slate-200'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="tone"
+                      checked={prefs.tone === value}
+                      onChange={() => setPrefs({ ...prefs, tone: value })}
+                      className="mt-0.5 accent-blue-600"
+                    />
+                    <div>
+                      <div className="text-sm font-bold text-slate-800">{label}</div>
+                      <div className="text-xs text-slate-500">{desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (<>
 
         {/* Photo Upload */}
         <div className="flex justify-center mb-6">
@@ -825,9 +943,10 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
             Remover foto
           </button>
         )}
+        </>)}
 
         {/* Action Buttons */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 mt-5">
           <button
             onClick={onClose}
             className="flex-1 py-4 rounded-xl font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors"
@@ -1285,10 +1404,10 @@ function TranscriptionView({
             </div>
           </div>
 
-          {/* Goal Selection (max 2) */}
+          {/* Goal Selection (optional, max 2) */}
           <div className="flex items-start gap-3">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider w-28 flex-shrink-0 pt-1">
-              Objetivo <span className="text-slate-300 font-normal">(máx. 2)</span>:
+              Objetivo <span className="text-slate-300 font-normal normal-case">(opcional)</span>:
             </span>
             <div className="flex flex-wrap gap-1.5">
               {(['ganho_muscular', 'perda_gordura', 'manutencao', 'performance', 'forca', 'recuperacao', 'saude_geral'] as PatientGoal[]).map((goal) => (
@@ -1458,10 +1577,10 @@ function TranscriptionView({
               </div>
             </div>
 
-            {/* Goal Quick Select (max 2) */}
+            {/* Goal Quick Select (optional, max 2) */}
             <div className="mb-4">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Objetivo <span className="text-slate-300 font-normal">(máx. 2)</span>
+                Objetivo <span className="text-slate-300 font-normal normal-case">(opcional)</span>
               </label>
               <div className="flex flex-wrap gap-1.5">
                 {(['ganho_muscular', 'perda_gordura', 'manutencao', 'performance', 'forca', 'recuperacao', 'saude_geral'] as PatientGoal[]).map((goal) => (
@@ -1521,7 +1640,8 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences }: any) {
+  const prefs = preferences || { showConduct: true, showAttention: true, showExams: true };
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
   const [editedConduct, setEditedConduct] = useState('');
@@ -1684,10 +1804,10 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: a
         </div>
 
         {/* Divider */}
-        <div className="border-t border-slate-100" />
+        {prefs.showConduct && <div className="border-t border-slate-100" />}
 
         {/* Conduta Nutricional */}
-        <div className="bg-slate-900 text-white p-4 sm:p-6 md:p-8 group relative">
+        {prefs.showConduct && <div className="bg-slate-900 text-white p-4 sm:p-6 md:p-8 group relative">
           <div className="flex items-center justify-between mb-4 md:mb-6">
             <h3 className="text-blue-400 font-black uppercase text-[10px] tracking-widest flex items-center gap-2">
               <Check size={14} /> Conduta Nutricional
@@ -1729,13 +1849,13 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: a
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Bottom cards row */}
       <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
         {/* Associated Conditions */}
-        {(conditions.length > 0 || editingSection === 'conditions') && (
+        {prefs.showAttention && (conditions.length > 0 || editingSection === 'conditions') && (
           <div className="bg-white p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 group relative">
             <div className="flex items-center justify-between mb-3 md:mb-4">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-amber-600 flex items-center gap-2">
@@ -1782,7 +1902,7 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack }: a
         )}
 
         {/* Exams - Priority Ordered (colors preserved) */}
-        {(exams.length > 0 || editingSection === 'exams') && (
+        {prefs.showExams && (exams.length > 0 || editingSection === 'exams') && (
           <div className="bg-white p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 group relative">
             <div className="flex items-center justify-between mb-3 md:mb-4">
               <h3 className="font-black text-[10px] uppercase tracking-widest text-slate-500 flex items-center gap-2">

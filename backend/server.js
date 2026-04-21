@@ -71,33 +71,47 @@ app.use(express.json({ limit: '50mb' }));
 const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Endpoint para análise nutricional (EchoMed)
+const TONE_INSTRUCTIONS = {
+  humanizado: `Use linguagem acolhedora, empática e próxima. Valide os sentimentos do paciente
+e aborde as questões com sensibilidade. Evite termos excessivamente técnicos.
+Priorize conexão e compreensão do contexto emocional.`,
+  sistemico: `Adote uma abordagem integrativa e sistêmica. Conecte alimentação com sono, estresse,
+rotina, emoções, atividade física e contexto social. Trabalhe com hipóteses de causas
+subjacentes interconectadas (eixo intestino-cérebro, inflamação, microbiota, etc.).
+Use linguagem profissional com base científica.`,
+  direto: `Use linguagem objetiva, clara e pragmática. Foque no que é acionável. Evite rodeios
+e elaborações emocionais. Vá direto à conduta e às recomendações práticas.`,
+};
+
 app.post('/api/analyze-medical', apiLimiter, requireAuth, async (req, res) => {
   try {
-    const { transcript } = req.body;
+    const { transcript, tone } = req.body;
+    const selectedTone = tone && TONE_INSTRUCTIONS[tone] ? tone : 'humanizado';
+    const toneInstruction = TONE_INSTRUCTIONS[selectedTone];
 
     if (!transcript || transcript.trim() === '') {
       return res.status(400).json({ error: "Transcrição vazia" });
     }
 
-    // Use Google AI Studio / Gemini API ($300 free credit!)
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
     if (!apiKey) {
       throw new Error("GEMINI_API_KEY not configured in .env file");
     }
 
-    console.log("🤖 Calling Google Gemini API for nutritional analysis...");
+    console.log(`🤖 Calling Google Gemini API (tone: ${selectedTone})...`);
 
     const systemPrompt = `
-Você é uma nutricionista clínica experiente, com abordagem humanizada e integrativa.
+Você é uma nutricionista clínica experiente.
 Seu papel é analisar a transcrição da consulta considerando que o paciente é um ser biopsicossocial,
 ou seja, os sinais e queixas podem estar relacionados não apenas à alimentação,
 mas também ao sono, estresse, emoções, rotina de trabalho, nível de atividade física,
 relacionamentos, saúde mental e contexto de vida.
 
+Tom da resposta: ${toneInstruction}
+
 Evite julgamentos, rótulos ou conclusões absolutas.
 Trabalhe com hipóteses nutricionais e possíveis causas associadas.
-Utilize linguagem profissional, acolhedora e clara.
 
 Analise a transcrição e retorne APENAS um objeto JSON válido,
 sem markdown, sem explicações externas, seguindo exatamente esta estrutura:

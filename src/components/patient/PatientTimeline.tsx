@@ -104,18 +104,18 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
 
       {/* Timeline */}
       <div className="relative pl-2">
-        {eventGroups.map((item, index) => {
-          // Check if it's a group or single event
+        {eventGroups.map((item) => {
           if ('consultation' in item) {
-            // It's a group with consultation + adjustments
+            // Consultation on the left, adjustments stacked on the right
             return (
-              <div key={item.consultation.id} className="mb-2">
-                <TimelineItem
-                  event={item.consultation}
-                  onClick={() => onEventClick(item.consultation)}
-                />
-                {/* Connected adjustments */}
-                <div className="ml-8 mt-2 space-y-2">
+              <div key={item.consultation.id} className="mb-2 flex flex-col md:flex-row md:items-stretch gap-2">
+                <div className="flex-1 min-w-0">
+                  <TimelineItem
+                    event={item.consultation}
+                    onClick={() => onEventClick(item.consultation)}
+                  />
+                </div>
+                <div className="md:w-64 flex-shrink-0 space-y-2">
                   {item.adjustments.map((adjustment) => (
                     <TimelineItem
                       key={adjustment.id}
@@ -130,7 +130,6 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
               </div>
             );
           } else {
-            // It's a single event
             return (
               <TimelineItem
                 key={item.id}

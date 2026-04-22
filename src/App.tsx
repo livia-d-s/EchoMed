@@ -554,20 +554,24 @@ export default function App() {
       const newEvent = addEventForPatient(patient.id, eventType, aiResponse, currentTranscript);
       setSelectedEvent(newEvent);
 
-      // Merge AI-extracted highlights into patient (accumulate across consultations)
+      // Merge AI-extracted highlights into patient (max 8 total, no duplicates)
       if (aiResponse.patientHighlights && aiResponse.patientHighlights.length > 0) {
+        const MAX_HIGHLIGHTS = 8;
         const existingHighlights = patient.highlights || [];
-        const newHighlights = aiResponse.patientHighlights.filter(
-          (h: string) => !existingHighlights.some(
-            (eh: string) => eh.toLowerCase() === h.toLowerCase()
-          )
-        );
-        if (newHighlights.length > 0) {
-          setPatients(prev => prev.map(p =>
-            p.id === patient.id
-              ? { ...p, highlights: [...existingHighlights, ...newHighlights] }
-              : p
-          ));
+        const remaining = MAX_HIGHLIGHTS - existingHighlights.length;
+        if (remaining > 0) {
+          const newHighlights = aiResponse.patientHighlights
+            .filter((h: string) => !existingHighlights.some(
+              (eh: string) => eh.toLowerCase() === h.toLowerCase()
+            ))
+            .slice(0, remaining);
+          if (newHighlights.length > 0) {
+            setPatients(prev => prev.map(p =>
+              p.id === patient.id
+                ? { ...p, highlights: [...existingHighlights, ...newHighlights] }
+                : p
+            ));
+          }
         }
       }
 

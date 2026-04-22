@@ -58,11 +58,25 @@ export function PatientHeader({
 
   const highlights = patient.highlights || [];
 
+  const MAX_HIGHLIGHTS = 8;
+
   const addHighlight = () => {
     if (!newHighlight.trim() || !onUpdateHighlights) return;
+    if (highlights.length >= MAX_HIGHLIGHTS) {
+      alert(`Limite de ${MAX_HIGHLIGHTS} destaques atingido. Remova algum para adicionar um novo.`);
+      return;
+    }
     onUpdateHighlights(patient.id, [...highlights, newHighlight.trim()]);
     setNewHighlight('');
     setIsAddingHighlight(false);
+  };
+
+  const handleClickAdd = () => {
+    if (highlights.length >= MAX_HIGHLIGHTS) {
+      alert(`Limite de ${MAX_HIGHLIGHTS} destaques atingido. Remova algum para adicionar um novo.`);
+      return;
+    }
+    setIsAddingHighlight(true);
   };
 
   const removeHighlight = (index: number) => {
@@ -213,7 +227,10 @@ export function PatientHeader({
           <div className="mt-4 pt-4 border-t border-slate-100">
             <div className="flex items-center gap-2 mb-2.5">
               <Sparkles size={12} className="text-blue-500" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Destaques do paciente</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                Destaques do paciente <span className="text-slate-300 normal-case">(máx. {MAX_HIGHLIGHTS})</span>
+                <span className="ml-1 text-slate-300 normal-case">— {highlights.length}/{MAX_HIGHLIGHTS}</span>
+              </span>
             </div>
             <div className="flex flex-wrap gap-2">
               {highlights.map((h, i) => (
@@ -290,7 +307,7 @@ export function PatientHeader({
                   </div>
                 ) : (
                   <button
-                    onClick={() => setIsAddingHighlight(true)}
+                    onClick={handleClickAdd}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold
                                border border-dashed border-slate-300 text-slate-400
                                hover:border-blue-400 hover:text-blue-500 transition-colors"

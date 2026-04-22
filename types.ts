@@ -95,6 +95,8 @@ export interface TimelineEvent {
   parentEventId?: string; // Links adjustment to a specific consultation
   previousPlan?: string;
   newPlan?: string;
+  // Briefing for next consultation (extracted from AI result)
+  suggestedNextQuestions?: string[];
 
   doctorName: string;
   createdAt: string;

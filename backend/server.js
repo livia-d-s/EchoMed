@@ -122,7 +122,8 @@ sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
   "possibleAssociatedConditions": ["condição ou desequilíbrio possível 1", "condição ou desequilíbrio possível 2"],
   "recommendedExams": ["exame laboratorial ou avaliação complementar 1", "exame 2"],
   "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada de forma humanizada",
-  "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"]
+  "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"],
+  "suggestedNextQuestions": ["pergunta 1", "pergunta 2", "pergunta 3"]
 }
 
 Regras para o campo patientHighlights:
@@ -130,6 +131,13 @@ Regras para o campo patientHighlights:
 - Exemplos válidos: "Não gosta de carne vermelha", "Treina tênis 4x/semana", "Dorme 5h por noite", "Intolerante à lactose", "Come por ansiedade"
 - Máximo 8 palavras por item
 - Extraia apenas o que foi dito, não invente
+
+Regras para o campo suggestedNextQuestions:
+- Gere NO MÁXIMO 3 perguntas estratégicas para a nutricionista fazer na próxima consulta
+- Foque em: (1) pontos que ficaram em aberto nesta consulta, (2) efeito das condutas sugeridas, (3) aspectos não explorados que seriam úteis
+- Exemplos: "Conseguiu reduzir a ingestão de laticínios? Os sintomas melhoraram?", "Como está o sono após os ajustes?", "Manteve a rotina de treino que mencionou?"
+- Seja prática e específica ao contexto deste paciente
+- Se a transcrição for muito curta para gerar perguntas úteis, retorne um array vazio []
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

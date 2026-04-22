@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Patient, TimelineEvent } from '../../../types';
 import { PatientHeader } from './PatientHeader';
 import { PatientTimeline } from './PatientTimeline';
+import { PatientBriefing } from './PatientBriefing';
 import { AdjustmentModal } from './AdjustmentModal';
 
 interface PatientPageProps {
@@ -65,6 +66,7 @@ export function PatientPage({
       />
 
       <div className="max-w-4xl mx-auto">
+        <PatientBriefing events={patientEvents} />
         <PatientTimeline
           events={patientEvents}
           onEventClick={onEventClick}

@@ -994,6 +994,7 @@ function TranscriptionView({
   const [interim, setInterim] = useState('');
   const [showNamePopup, setShowNamePopup] = useState(false);
   const [tempName, setTempName] = useState('');
+  const [showPopupSuggestions, setShowPopupSuggestions] = useState(false);
   const [tempGoals, setTempGoals] = useState<PatientGoal[]>([]);
   const [tempGoalCustom, setTempGoalCustom] = useState('');
   const [tempTraining, setTempTraining] = useState('');
@@ -1536,16 +1537,58 @@ function TranscriptionView({
             </div>
 
             {/* Patient Name */}
-            <div className="mb-4">
+            <div className="mb-4 relative">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Nome Completo</label>
               <input
                 type="text"
                 placeholder="Ex: Maria Silva Santos"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 outline-none font-bold focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
                 value={tempName}
-                onChange={(e) => setTempName(e.target.value)}
+                onChange={(e) => { setTempName(e.target.value); setShowPopupSuggestions(true); }}
+                onFocus={() => setShowPopupSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowPopupSuggestions(false), 150)}
                 autoFocus
               />
+              {/* Autocomplete suggestions inside popup */}
+              {showPopupSuggestions && tempName.trim() && (() => {
+                const popupSuggestions = (patients || []).filter((p: any) =>
+                  p.name.toLowerCase().includes(tempName.toLowerCase()) &&
+                  p.name.toLowerCase() !== tempName.toLowerCase()
+                ).slice(0, 5);
+                if (popupSuggestions.length === 0) return null;
+                return (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-10">
+                    {popupSuggestions.map((p: any) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="w-full px-3 py-2.5 text-left hover:bg-blue-50 flex items-center gap-2.5 transition-colors"
+                        onMouseDown={() => {
+                          setTempName(p.name);
+                          // Prefill goals/training/isFirst from existing patient
+                          if (p.goals?.length) setTempGoals(p.goals);
+                          if (p.goalCustom) setTempGoalCustom(p.goalCustom);
+                          if (p.trainingRoutine?.length) {
+                            setInlineTrainingText(
+                              p.trainingRoutine.map((t: any) => `${t.type}: ${t.frequency}`).join(', ')
+                            );
+                          }
+                          // If patient exists, it's not a first consultation anymore
+                          if (p.isFirstConsultation === false || events.some((e: any) => e.patientId === p.id && e.type !== 'adjustment')) {
+                            setTempIsFirst(false);
+                          }
+                          setShowPopupSuggestions(false);
+                        }}
+                      >
+                        <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs">
+                          {p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-slate-700 text-sm truncate">{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
 
             {/* First Consultation Toggle */}

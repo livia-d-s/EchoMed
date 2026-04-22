@@ -107,15 +107,18 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
         {eventGroups.map((item) => {
           if ('consultation' in item) {
             // Consultation on the left, adjustments stacked on the right
+            // Orange horizontal line visually connects them
             return (
-              <div key={item.consultation.id} className="mb-2 flex flex-col md:flex-row md:items-stretch gap-2">
+              <div key={item.consultation.id} className="mb-2 flex flex-col md:flex-row md:items-center gap-0">
                 <div className="flex-1 min-w-0">
                   <TimelineItem
                     event={item.consultation}
                     onClick={() => onEventClick(item.consultation)}
                   />
                 </div>
-                <div className="md:w-64 flex-shrink-0 space-y-2">
+                {/* Horizontal orange connector (desktop only) */}
+                <div className="hidden md:block h-0.5 w-4 bg-amber-400 flex-shrink-0" />
+                <div className="md:w-64 flex-shrink-0 space-y-2 md:ml-0 ml-4">
                   {item.adjustments.map((adjustment) => (
                     <TimelineItem
                       key={adjustment.id}

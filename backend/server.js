@@ -133,11 +133,17 @@ Regras para o campo patientHighlights:
 - Extraia apenas o que foi dito, não invente
 
 Regras para o campo suggestedNextQuestions:
-- Gere NO MÁXIMO 3 perguntas estratégicas para a nutricionista fazer na próxima consulta
-- Foque em: (1) pontos que ficaram em aberto nesta consulta, (2) efeito das condutas sugeridas, (3) aspectos não explorados que seriam úteis
-- Exemplos: "Conseguiu reduzir a ingestão de laticínios? Os sintomas melhoraram?", "Como está o sono após os ajustes?", "Manteve a rotina de treino que mencionou?"
-- Seja prática e específica ao contexto deste paciente
-- Se a transcrição for muito curta para gerar perguntas úteis, retorne um array vazio []
+- Gere NO MÁXIMO 3 sugestões ESTRATÉGICAS e ACIONÁVEIS para a próxima consulta
+- NÃO repita conteúdo do clinicalRationale ou nutritionalConduct
+- Cada sugestão deve:
+  * Ser curta (1-2 linhas)
+  * Combinar uma pergunta ou recomendação COM justificativa clínica breve
+  * Propor algo novo ou complementar que a nutri pode explorar
+- Exemplos do estilo esperado:
+  * "Investigar se gosta de beterraba — rica em ferro, compensaria a baixa ingestão de carne vermelha e pode aliviar o cansaço relatado"
+  * "Perguntar sobre qualidade do sono após ajuste do jantar — alimentação noturna pesada pode estar impactando a recuperação do treino"
+  * "Avaliar adesão ao jejum intermitente relatado — se mantiver, considerar ajuste no pré-treino para preservar performance"
+- Se a transcrição for muito curta para gerar sugestões úteis, retorne um array vazio []
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

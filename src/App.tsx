@@ -488,14 +488,24 @@ export default function App() {
           patientContext,
           tone: doctorProfile.preferences?.tone || 'humanizado',
           exams: (() => {
-            const pn = (patientContext as any)?.patientName || patientName;
-            if (!pn) return [];
-            const match = patients.find((p: any) => p.name.toLowerCase() === pn.trim().toLowerCase());
-            return (match?.exams || []).map((e: any) => ({
-              fileName: e.fileName,
-              uploadedAt: e.uploadedAt,
-              extractedText: e.extractedText,
-            }));
+            // Combine existing patient's exams (if any) + pending exams uploaded now.
+            // Dedupe by fileName + text length to avoid sending the same file twice.
+            const pn = (patientName || '').trim().toLowerCase();
+            const match = pn ? patients.find((p: any) => p.name.toLowerCase() === pn) : null;
+            const existing: any[] = match?.exams || [];
+            const combined = [...existing, ...(pendingExams || [])];
+            const seen = new Set<string>();
+            return combined.reduce<any[]>((acc, e: any) => {
+              const key = `${e.fileName}::${e.extractedText?.length || 0}`;
+              if (seen.has(key)) return acc;
+              seen.add(key);
+              acc.push({
+                fileName: e.fileName,
+                uploadedAt: e.uploadedAt,
+                extractedText: e.extractedText,
+              });
+              return acc;
+            }, []);
           })(),
         })
       });
@@ -606,8 +616,19 @@ export default function App() {
           if (newHighlights.length > 0) {
             updated.highlights = [...existingHighlights, ...newHighlights];
           }
-          if (rawTraining.length > 0 && (!p.trainingRoutine || p.trainingRoutine.length === 0)) {
-            updated.trainingRoutine = rawTraining;
+          // Merge training: keep nutri's manual entries + append new ones the AI extracted,
+          // deduping by normalized `type` name (case-insensitive).
+          if (rawTraining.length > 0) {
+            const existingTraining = p.trainingRoutine || [];
+            const existingTypes = new Set(
+              existingTraining.map((t: any) => (t.type || '').toLowerCase().trim())
+            );
+            const toAdd = rawTraining.filter(
+              (t: any) => !existingTypes.has((t.type || '').toLowerCase().trim())
+            );
+            if (toAdd.length > 0) {
+              updated.trainingRoutine = [...existingTraining, ...toAdd];
+            }
           }
           if (newExams.length > 0) {
             updated.exams = [...existingExams, ...newExams];

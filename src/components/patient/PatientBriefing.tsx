@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Sparkles, ChevronDown, ChevronUp, Calendar, Lightbulb, Sliders } from 'lucide-react';
+import { Sparkles, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { TimelineEvent } from '../../../types';
 
 interface PatientBriefingProps {
@@ -43,12 +43,7 @@ export function PatientBriefing({ events }: PatientBriefingProps) {
     ? result.suggestedNextQuestions.slice(0, 3)
     : [];
 
-  const linkedAdjustments = events
-    .filter(e => e.type === 'adjustment' && e.parentEventId === lastConsultation.id)
-    .sort((a, b) => toTime(b.date) - toTime(a.date));
-
-  const hasAnyContent = suggestions.length > 0 || linkedAdjustments.length > 0;
-  if (!hasAnyContent) return null;
+  if (suggestions.length === 0) return null;
 
   return (
     <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl md:rounded-3xl overflow-hidden mb-4 md:mb-6">
@@ -62,7 +57,7 @@ export function PatientBriefing({ events }: PatientBriefingProps) {
           </div>
           <div className="text-left min-w-0">
             <h3 className="font-black text-sm md:text-base text-slate-900">
-              Briefing para próxima consulta
+              Para próxima consulta
             </h3>
             <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
               <Calendar size={11} />
@@ -76,48 +71,19 @@ export function PatientBriefing({ events }: PatientBriefingProps) {
       </button>
 
       {expanded && (
-        <div className="px-4 md:px-5 pb-4 md:pb-5 space-y-3">
-          {/* Strategic suggestions from AI — the real value */}
-          {suggestions.length > 0 && (
-            <div className="bg-white/70 border border-indigo-100 rounded-xl p-3 md:p-4">
-              <div className="flex items-center gap-1.5 mb-2.5">
-                <Lightbulb size={12} className="text-indigo-600" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
-                  Sugestões estratégicas da IA
-                </span>
-              </div>
-              <ul className="space-y-2.5">
-                {suggestions.map((s, i) => (
-                  <li key={i} className="text-sm text-slate-700 leading-relaxed flex items-start gap-2.5">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-black mt-0.5">
-                      {i + 1}
-                    </span>
-                    <span>{s}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Observations (manual) from the last consultation */}
-          {linkedAdjustments.length > 0 && (
-            <div className="bg-white/70 border border-amber-100 rounded-xl p-3 md:p-4">
-              <div className="flex items-center gap-1.5 mb-2">
-                <Sliders size={12} className="text-amber-600" />
-                <span className="text-[10px] font-black uppercase tracking-widest text-amber-600">
-                  Observações da nutri
-                </span>
-              </div>
-              <ul className="space-y-1.5">
-                {linkedAdjustments.map((adj) => (
-                  <li key={adj.id} className="text-sm text-slate-700 leading-relaxed flex items-start gap-2">
-                    <span className="text-amber-500 mt-1 flex-shrink-0">•</span>
-                    <span>{adj.adjustmentNote}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+        <div className="px-4 md:px-5 pb-4 md:pb-5">
+          <div className="bg-white/70 border border-indigo-100 rounded-xl p-3 md:p-4">
+            <ul className="space-y-2.5">
+              {suggestions.map((s, i) => (
+                <li key={i} className="text-sm text-slate-700 leading-relaxed flex items-start gap-2.5">
+                  <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[11px] font-black mt-0.5">
+                    {i + 1}
+                  </span>
+                  <span>{s}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       )}
     </div>

@@ -117,33 +117,47 @@ Analise a transcrição e retorne APENAS um objeto JSON válido,
 sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
 
 {
-  "nutritionalAssessment": "síntese da avaliação nutricional principal, em forma de hipótese",
+  "nutritionalAssessment": "síntese concisa (MÁX 3-4 frases) da avaliação nutricional principal",
   "clinicalRationale": "justificativa detalhada considerando alimentação, comportamento, rotina, emoções, sono, estresse e treino",
   "possibleAssociatedConditions": ["condição ou desequilíbrio possível 1", "condição ou desequilíbrio possível 2"],
   "recommendedExams": ["exame laboratorial ou avaliação complementar 1", "exame 2"],
-  "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada de forma humanizada",
+  "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada",
   "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"],
-  "suggestedNextQuestions": ["pergunta 1", "pergunta 2", "pergunta 3"]
+  "extractedTraining": [{"type": "Musculação", "frequency": "4x/semana"}],
+  "suggestedNextQuestions": ["sugestão 1", "sugestão 2", "sugestão 3"]
 }
 
+Regras para o campo nutritionalAssessment:
+- MÁXIMO 3-4 frases, síntese concisa
+- Escrito em terceira pessoa sobre a paciente (ex: "A paciente apresenta..." e não "Você apresenta...")
+
 Regras para o campo patientHighlights:
-- Extraia pontos-chave mencionados pelo paciente na conversa
-- Exemplos válidos: "Não gosta de carne vermelha", "Treina tênis 4x/semana", "Dorme 5h por noite", "Intolerante à lactose", "Come por ansiedade"
+- Extraia pontos-chave mencionados na conversa
+- Escreva sempre em TERCEIRA PESSOA sobre a paciente (ex: "Tem filhos, rotina corrida" — NUNCA "Tenho filhos")
+- Exemplos válidos: "Não gosta de carne vermelha", "Dorme 5h por noite", "Intolerante à lactose", "Come por ansiedade"
+- NÃO inclua informações sobre treino/atividade física aqui (use o campo extractedTraining)
 - Máximo 8 palavras por item
 - Extraia apenas o que foi dito, não invente
 
+Regras para o campo extractedTraining:
+- Extraia qualquer menção a atividade física / treino estruturado do paciente
+- Formato: array de objetos { "type": "nome da atividade", "frequency": "frequência" }
+- Exemplos: [{"type": "Musculação", "frequency": "4x/semana"}], [{"type": "Corrida", "frequency": "3x/semana"}, {"type": "Yoga", "frequency": "1x/semana"}]
+- Se paciente disser que NÃO treina, retorne: [{"type": "Sedentária", "frequency": "não treina"}]
+- Se não mencionar nada sobre treino, retorne array vazio []
+
 Regras para o campo suggestedNextQuestions:
-- Gere NO MÁXIMO 3 sugestões ESTRATÉGICAS e ACIONÁVEIS para a próxima consulta
+- Gere NO MÁXIMO 3 sugestões ESTRATÉGICAS e ACIONÁVEIS para a nutri usar na próxima consulta
+- IMPORTANTE: escreva AS SUGESTÕES DIRIGIDAS À NUTRI, falando SOBRE a paciente em terceira pessoa
+  * CORRETO: "Investigar o que ELA considera 'vitamina' — entender os ingredientes pode revelar oportunidades de aumentar proteínas"
+  * ERRADO: "Vamos conversar sobre o que VOCÊ considera vitamina"
+- Cada sugestão combina uma recomendação/pergunta COM justificativa clínica breve (1-2 linhas)
 - NÃO repita conteúdo do clinicalRationale ou nutritionalConduct
-- Cada sugestão deve:
-  * Ser curta (1-2 linhas)
-  * Combinar uma pergunta ou recomendação COM justificativa clínica breve
-  * Propor algo novo ou complementar que a nutri pode explorar
 - Exemplos do estilo esperado:
-  * "Investigar se gosta de beterraba — rica em ferro, compensaria a baixa ingestão de carne vermelha e pode aliviar o cansaço relatado"
-  * "Perguntar sobre qualidade do sono após ajuste do jantar — alimentação noturna pesada pode estar impactando a recuperação do treino"
-  * "Avaliar adesão ao jejum intermitente relatado — se mantiver, considerar ajuste no pré-treino para preservar performance"
-- Se a transcrição for muito curta para gerar sugestões úteis, retorne um array vazio []
+  * "Investigar se ela gosta de beterraba — rica em ferro, compensaria a baixa ingestão de carne vermelha e pode aliviar o cansaço relatado"
+  * "Perguntar sobre qualidade do sono dela após o ajuste do jantar — alimentação noturna pesada pode estar impactando a recuperação"
+  * "Explorar com ela estratégias de meal prep — a rotina corrida dificulta refeições saudáveis, e pequenos preparos antecipados podem facilitar a adesão"
+- Se a transcrição for muito curta, retorne array vazio []
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

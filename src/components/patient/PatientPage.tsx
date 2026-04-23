@@ -65,7 +65,7 @@ export function PatientPage({
         onUpdateHighlights={onUpdateHighlights}
       />
 
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <PatientBriefing events={patientEvents} />
         <PatientTimeline
           events={patientEvents}

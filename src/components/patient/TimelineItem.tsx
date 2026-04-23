@@ -97,25 +97,21 @@ export function TimelineItem({ event, onClick, onDelete, onEdit, isConnected }: 
   const isAdjustment = event.type === 'adjustment';
 
   return (
-    <div className={`relative ${isConnected ? 'pb-4' : 'pb-8'} last:pb-0`}>
-      {/* Vertical line connector */}
+    <div className={`relative ${isConnected ? '' : 'pb-8'} last:pb-0`}>
+      {/* Vertical line + dot only for standalone items (not side-by-side adjustments) */}
       {!isConnected && (
-        <div className="absolute left-[7px] top-4 bottom-0 w-0.5 bg-slate-200" />
+        <>
+          <div className="absolute left-[7px] top-4 bottom-0 w-0.5 bg-slate-200" />
+          <div
+            className={`absolute left-0 w-4 h-4 rounded-full ${config.color} ring-4 ring-white shadow-sm`}
+          />
+        </>
       )}
-      {isConnected && (
-        <div className="absolute left-[7px] -top-4 h-4 w-0.5 bg-amber-300" />
-      )}
-
-      {/* Dot */}
-      <div
-        className={`absolute left-0 ${isConnected ? 'w-3 h-3 left-[2px]' : 'w-4 h-4'} rounded-full ${config.color}
-                    ring-4 ring-white shadow-sm`}
-      />
 
       {/* Content Card */}
       <div
         onClick={isEditing ? undefined : onClick}
-        className={`${isConnected ? 'ml-6' : 'ml-8'} p-4 bg-white rounded-2xl border
+        className={`${isConnected ? '' : 'ml-8'} p-4 bg-white rounded-2xl border
                    ${isConnected ? 'border-amber-200 border-l-4 border-l-amber-400' : 'border-slate-200'}
                    hover:border-slate-300 hover:shadow-md ${isEditing ? '' : 'cursor-pointer'}
                    transition-all group relative`}
@@ -150,8 +146,8 @@ export function TimelineItem({ event, onClick, onDelete, onEdit, isConnected }: 
             {formatDate(event.date)}
           </span>
           <span
-            className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1
-                        rounded-full ${config.badgeBg} ${config.badgeText}`}
+            className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5
+                        rounded-full whitespace-nowrap ${config.badgeBg} ${config.badgeText}`}
           >
             {config.label}
           </span>

@@ -90,7 +90,7 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
   const eventGroups = groupedEvents();
 
   return (
-    <div className="max-w-2xl">
+    <div className="w-full">
       {/* Section Header */}
       <div className="flex items-center gap-2 mb-6">
         <div className="w-1 h-6 bg-blue-600 rounded-full" />
@@ -110,7 +110,7 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
             // Orange horizontal line visually connects them
             return (
               <div key={item.consultation.id} className="mb-2 flex flex-col md:flex-row md:items-center gap-0">
-                <div className="flex-1 min-w-0">
+                <div className="md:basis-[70%] min-w-0">
                   <TimelineItem
                     event={item.consultation}
                     onClick={() => onEventClick(item.consultation)}
@@ -118,7 +118,7 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
                 </div>
                 {/* Horizontal orange connector (desktop only) */}
                 <div className="hidden md:block h-0.5 w-4 bg-amber-400 flex-shrink-0" />
-                <div className="md:w-64 flex-shrink-0 space-y-2 md:ml-0 ml-4">
+                <div className="md:basis-[30%] flex-shrink space-y-2 mt-2 md:mt-0">
                   {item.adjustments.map((adjustment) => (
                     <TimelineItem
                       key={adjustment.id}

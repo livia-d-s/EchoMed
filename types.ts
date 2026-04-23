@@ -76,6 +76,15 @@ export interface Patient {
   trainingRoutine?: TrainingActivity[];
   isFirstConsultation?: boolean; // Tracks if first consultation was done
   highlights?: string[];         // AI-extracted key patient insights (persists across consultations)
+  exams?: PatientExam[];         // Uploaded lab result PDFs (extracted text)
+}
+
+export interface PatientExam {
+  id: string;
+  fileName: string;
+  uploadedAt: string;           // ISO date
+  extractedText: string;         // Full text extracted from PDF (used as AI context)
+  sizeBytes?: number;            // Original PDF size (for display)
 }
 
 export type EventType = 'initial' | 'followup' | 'adjustment';

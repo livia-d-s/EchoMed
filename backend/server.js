@@ -85,12 +85,34 @@ e elaborações emocionais. Vá direto à conduta e às recomendações prática
 
 app.post('/api/analyze-medical', apiLimiter, requireAuth, async (req, res) => {
   try {
-    const { transcript, tone } = req.body;
+    const { transcript, tone, exams } = req.body;
     const selectedTone = tone && TONE_INSTRUCTIONS[tone] ? tone : 'humanizado';
     const toneInstruction = TONE_INSTRUCTIONS[selectedTone];
 
     if (!transcript || transcript.trim() === '') {
       return res.status(400).json({ error: "Transcrição vazia" });
+    }
+
+    // Build exam context block (cap total length to avoid ballooning prompt)
+    let examsContext = '';
+    if (Array.isArray(exams) && exams.length > 0) {
+      const MAX_PER_EXAM = 8000;
+      const MAX_TOTAL = 20000;
+      let used = 0;
+      const parts = [];
+      for (const ex of exams) {
+        if (used >= MAX_TOTAL) break;
+        const label = ex.fileName || 'exame.pdf';
+        const dateStr = ex.uploadedAt ? new Date(ex.uploadedAt).toLocaleDateString('pt-BR') : '';
+        const remaining = MAX_TOTAL - used;
+        const text = String(ex.extractedText || '').slice(0, Math.min(MAX_PER_EXAM, remaining));
+        if (!text) continue;
+        parts.push(`--- ${label}${dateStr ? ` (anexado em ${dateStr})` : ''} ---\n${text}`);
+        used += text.length;
+      }
+      if (parts.length > 0) {
+        examsContext = `\n\n[EXAMES LABORATORIAIS ANEXADOS]\nOs PDFs abaixo foram anexados ao prontuário da paciente. Use os valores e observações nas suas hipóteses. Cruze com queixas/sintomas relatados na consulta (ex: cansaço + ferritina baixa → anemia ferropriva).\n\n${parts.join('\n\n')}`;
+      }
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -164,7 +186,7 @@ mencione a necessidade de investigação adicional dentro do campo apropriado,
 sem inventar dados.
 `;
 
-    const prompt = `${systemPrompt}\n\nTranscrição da consulta:\n${transcript}`;
+    const prompt = `${systemPrompt}\n\nTranscrição da consulta:\n${transcript}${examsContext}`;
 
     // Use Google AI Studio API - Gemini 2.0 Flash
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {

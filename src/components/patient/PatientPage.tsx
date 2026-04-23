@@ -3,7 +3,9 @@ import { Patient, TimelineEvent } from '../../../types';
 import { PatientHeader } from './PatientHeader';
 import { PatientTimeline } from './PatientTimeline';
 import { PatientBriefing } from './PatientBriefing';
+import { PatientExams } from './PatientExams';
 import { AdjustmentModal } from './AdjustmentModal';
+import { PatientExam } from '../../../types';
 
 interface PatientPageProps {
   patient: Patient;
@@ -16,6 +18,7 @@ interface PatientPageProps {
   onEditEvent?: (eventId: string, newNote: string) => void;
   onEditPatient?: (patientId: string, newName: string) => void;
   onUpdateHighlights?: (patientId: string, highlights: string[]) => void;
+  onUpdateExams?: (patientId: string, exams: PatientExam[]) => void;
 }
 
 export function PatientPage({
@@ -28,7 +31,8 @@ export function PatientPage({
   onDeleteEvent,
   onEditEvent,
   onEditPatient,
-  onUpdateHighlights
+  onUpdateHighlights,
+  onUpdateExams,
 }: PatientPageProps) {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
 
@@ -67,6 +71,9 @@ export function PatientPage({
 
       <div className="max-w-4xl mx-auto">
         <PatientBriefing events={patientEvents} />
+        {onUpdateExams && (
+          <PatientExams patient={patient} onUpdateExams={onUpdateExams} />
+        )}
         <PatientTimeline
           events={patientEvents}
           onEventClick={onEventClick}

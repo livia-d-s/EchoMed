@@ -77,6 +77,7 @@ export interface Patient {
   isFirstConsultation?: boolean; // Tracks if first consultation was done
   highlights?: string[];         // AI-extracted key patient insights (persists across consultations)
   exams?: PatientExam[];         // Uploaded lab result PDFs (extracted text)
+  mealPlans?: MealPlan[];        // Uploaded meal plan PDFs (most recent is the active one)
 }
 
 export interface PatientExam {
@@ -85,6 +86,14 @@ export interface PatientExam {
   uploadedAt: string;           // ISO date
   extractedText: string;         // Full text extracted from PDF (used as AI context)
   sizeBytes?: number;            // Original PDF size (for display)
+}
+
+export interface MealPlan {
+  id: string;
+  fileName: string;
+  uploadedAt: string;
+  extractedText: string;
+  sizeBytes?: number;
 }
 
 export type EventType = 'initial' | 'followup' | 'adjustment';

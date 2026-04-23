@@ -6,7 +6,11 @@ import { extractTextFromPdf, MAX_PDF_FILE_SIZE } from '../../utils/pdfExtract';
 interface ExamUploaderProps {
   exams: PatientExam[];
   onChange: (exams: PatientExam[]) => void;
-  compact?: boolean; // tighter spacing for use inside popups
+  compact?: boolean;
+  label?: string;          // Default: "Exames laboratoriais"
+  emptyMessage?: string;   // Default: generic exam message
+  idPrefix?: string;       // Prefix for generated IDs (default "exam")
+  buttonColor?: 'blue' | 'emerald'; // Accent color variant
 }
 
 const formatDate = (d: any) => {
@@ -27,10 +31,21 @@ const formatFileSize = (bytes?: number) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export function ExamUploader({ exams, onChange, compact = false }: ExamUploaderProps) {
+export function ExamUploader({
+  exams, onChange, compact = false,
+  label = 'Exames laboratoriais',
+  emptyMessage = 'Nenhum exame. A IA considerará os PDFs anexados durante a análise.',
+  idPrefix = 'exam',
+  buttonColor = 'blue',
+}: ExamUploaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const accent = buttonColor === 'emerald'
+    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+    : 'text-blue-600 bg-blue-50 hover:bg-blue-100';
+  const iconColor = buttonColor === 'emerald' ? 'text-emerald-600' : 'text-blue-600';
+  void compact;
 
   const handleFile = async (file: File) => {
     setError(null);
@@ -51,7 +66,7 @@ export function ExamUploader({ exams, onChange, compact = false }: ExamUploaderP
         return;
       }
       const newExam: PatientExam = {
-        id: `exam_${Date.now()}`,
+        id: `${idPrefix}_${Date.now()}`,
         fileName: file.name,
         uploadedAt: new Date().toISOString(),
         extractedText: text,
@@ -80,13 +95,13 @@ export function ExamUploader({ exams, onChange, compact = false }: ExamUploaderP
     <div className={compact ? '' : ''}>
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-          Exames laboratoriais {exams.length > 0 && <span className="text-slate-400 normal-case">({exams.length})</span>}
+          {label} {exams.length > 0 && <span className="text-slate-400 normal-case">({exams.length})</span>}
         </span>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
           disabled={isUploading}
-          className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors disabled:opacity-50"
+          className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 ${accent}`}
         >
           {isUploading ? (
             <>
@@ -116,7 +131,7 @@ export function ExamUploader({ exams, onChange, compact = false }: ExamUploaderP
 
       {exams.length === 0 ? (
         <p className="text-xs text-slate-400">
-          Nenhum exame. A IA considerará os PDFs anexados durante a análise.
+          {emptyMessage}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -125,7 +140,7 @@ export function ExamUploader({ exams, onChange, compact = false }: ExamUploaderP
               key={exam.id}
               className="flex items-center gap-2.5 p-2 bg-slate-50 rounded-lg border border-slate-100 group"
             >
-              <FileText size={13} className="text-blue-600 flex-shrink-0" />
+              <FileText size={13} className={`${iconColor} flex-shrink-0`} />
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-slate-700 truncate">{exam.fileName}</p>
                 <p className="text-[10px] text-slate-400">

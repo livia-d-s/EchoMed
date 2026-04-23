@@ -85,7 +85,7 @@ e elaborações emocionais. Vá direto à conduta e às recomendações prática
 
 app.post('/api/analyze-medical', apiLimiter, requireAuth, async (req, res) => {
   try {
-    const { transcript, tone, exams } = req.body;
+    const { transcript, tone, exams, activeMealPlan } = req.body;
     const selectedTone = tone && TONE_INSTRUCTIONS[tone] ? tone : 'humanizado';
     const toneInstruction = TONE_INSTRUCTIONS[selectedTone];
 
@@ -116,6 +116,22 @@ OBRIGATÓRIO: Você DEVE ler, analisar e mencionar explicitamente os valores des
 
 ${parts.join('\n\n')}`;
       }
+    }
+
+    // Build active meal plan context block (most recent plan attached to the patient)
+    let mealPlanContext = '';
+    if (activeMealPlan && typeof activeMealPlan.extractedText === 'string' && activeMealPlan.extractedText.trim()) {
+      const MAX_PLAN = 15000;
+      const planText = activeMealPlan.extractedText.slice(0, MAX_PLAN);
+      const label = activeMealPlan.fileName || 'plano.pdf';
+      const dateStr = activeMealPlan.uploadedAt
+        ? new Date(activeMealPlan.uploadedAt).toLocaleDateString('pt-BR')
+        : '';
+      mealPlanContext = `\n\n[PLANO ALIMENTAR ATUAL DA PACIENTE]
+OBRIGATÓRIO: A paciente já segue o plano alimentar abaixo. No campo "nutritionalConduct", em vez de criar um plano novo do zero, SUGIRA AJUSTES ESPECÍFICOS neste plano atual com base no que foi dito na consulta (ex: "Substituir o lanche da tarde atual por X, pois a paciente relatou fome à noite"). Cite partes concretas do plano quando for ajustar. Se tudo estiver adequado, confirme a manutenção do plano. NÃO ignore o plano existente.
+
+--- ${label}${dateStr ? ` (anexado em ${dateStr})` : ''} ---
+${planText}`;
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
@@ -196,7 +212,7 @@ mencione a necessidade de investigação adicional dentro do campo apropriado,
 sem inventar dados.
 `;
 
-    const prompt = `${systemPrompt}\n\nTranscrição da consulta:\n${transcript}${examsContext}`;
+    const prompt = `${systemPrompt}\n\nTranscrição da consulta:\n${transcript}${examsContext}${mealPlanContext}`;
 
     // Use Google AI Studio API - Gemini 2.0 Flash
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {

@@ -113,6 +113,7 @@ export default function App() {
   const [showProfilePopup, setShowProfilePopup] = useState(false);
   // Exams uploaded in popup/transcription — applied to the patient on finalize
   const [pendingExams, setPendingExams] = useState<any[]>([]);
+  const [pendingMealPlans, setPendingMealPlans] = useState<any[]>([]);
 
   // Load all user-scoped data when user changes (login/logout switch)
   useEffect(() => {
@@ -507,6 +508,27 @@ export default function App() {
               return acc;
             }, []);
           })(),
+          activeMealPlan: (() => {
+            const pn = (patientName || '').trim().toLowerCase();
+            const match = pn ? patients.find((p: any) => p.name.toLowerCase() === pn) : null;
+            const existing: any[] = match?.mealPlans || [];
+            const combined = [...existing, ...(pendingMealPlans || [])];
+            if (combined.length === 0) return null;
+            // Pick most recent (active)
+            const toTimeLocal = (d: any): number => {
+              if (!d) return 0;
+              if (d.toDate) return d.toDate().getTime();
+              if (d.seconds) return d.seconds * 1000;
+              const parsed = new Date(d).getTime();
+              return isNaN(parsed) ? 0 : parsed;
+            };
+            const active = [...combined].sort((a, b) => toTimeLocal(b.uploadedAt) - toTimeLocal(a.uploadedAt))[0];
+            return {
+              fileName: active.fileName,
+              uploadedAt: active.uploadedAt,
+              extractedText: active.extractedText,
+            };
+          })(),
         })
       });
 
@@ -600,16 +622,22 @@ export default function App() {
           )
         : [];
 
-      // Merge pending exams (uploaded in popup/transcription) into the patient,
-      // skipping any that are already on the patient (dedupe by fileName + extractedText length)
+      // Merge pending exams + meal plans (uploaded in popup/transcription) into the patient,
+      // dedupe by fileName + extractedText length
       const existingExams: any[] = (patient as any).exams || [];
       const newExams = (pendingExams || []).filter(
         (pe: any) => !existingExams.some(
           (ee: any) => ee.fileName === pe.fileName && ee.extractedText?.length === pe.extractedText?.length
         )
       );
+      const existingMealPlans: any[] = (patient as any).mealPlans || [];
+      const newMealPlans = (pendingMealPlans || []).filter(
+        (pm: any) => !existingMealPlans.some(
+          (em: any) => em.fileName === pm.fileName && em.extractedText?.length === pm.extractedText?.length
+        )
+      );
 
-      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0) {
+      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0 || newMealPlans.length > 0) {
         setPatients(prev => prev.map(p => {
           if (p.id !== patient.id) return p;
           const updated: any = { ...p };
@@ -633,11 +661,15 @@ export default function App() {
           if (newExams.length > 0) {
             updated.exams = [...existingExams, ...newExams];
           }
+          if (newMealPlans.length > 0) {
+            updated.mealPlans = [...existingMealPlans, ...newMealPlans];
+          }
           return updated;
         }));
       }
-      // Clear pending exams after applying
+      // Clear pending docs after applying
       setPendingExams([]);
+      setPendingMealPlans([]);
 
       // Update UI immediately (before Firebase which may hang)
       setCurrentResult(aiResponse);
@@ -729,6 +761,7 @@ export default function App() {
             patientTraining={currentPatientTraining} setPatientTraining={setCurrentPatientTraining}
             isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
             pendingExams={pendingExams} setPendingExams={setPendingExams}
+            pendingMealPlans={pendingMealPlans} setPendingMealPlans={setPendingMealPlans}
           />
         )}
         {view === 'patients' && (
@@ -771,6 +804,14 @@ export default function App() {
               ));
               if (selectedPatient?.id === patientId) {
                 setSelectedPatient(prev => prev ? { ...prev, exams } : null);
+              }
+            }}
+            onUpdateMealPlans={(patientId: string, mealPlans: any[]) => {
+              setPatients(prev => prev.map(p =>
+                p.id === patientId ? { ...p, mealPlans } : p
+              ));
+              if (selectedPatient?.id === patientId) {
+                setSelectedPatient(prev => prev ? { ...prev, mealPlans } : null);
               }
             }}
             onEventClick={(event) => {
@@ -1064,7 +1105,8 @@ function TranscriptionView({
   autosaveKey, status, setStatus, patientName, setPatientName, transcript, setTranscript, onFinalize, patients, events,
   patientGoals, setPatientGoals, patientGoalCustom, setPatientGoalCustom,
   patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation,
-  pendingExams, setPendingExams
+  pendingExams, setPendingExams,
+  pendingMealPlans, setPendingMealPlans
 }: any) {
   const recognitionRef = useRef<any>(null);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
@@ -1235,6 +1277,7 @@ function TranscriptionView({
       setTempTraining('');
       setTempIsFirst(null);
       setPendingExams([]);
+      setPendingMealPlans([]);
       setShowNamePopup(true);
       return false;
     }
@@ -1420,8 +1463,9 @@ function TranscriptionView({
                       setPatientName(p.name);
                       setShowSuggestions(false);
                       setNameWarning('');
-                      // Pre-load existing patient exams so nutri can see/add more
+                      // Pre-load existing docs so nutri can see/add more
                       if (p.exams?.length) setPendingExams(p.exams);
+                      if (p.mealPlans?.length) setPendingMealPlans(p.mealPlans);
                     }}
                   >
                     <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
@@ -1533,6 +1577,19 @@ function TranscriptionView({
           {/* Exam upload */}
           <div className="pt-1">
             <ExamUploader exams={pendingExams || []} onChange={setPendingExams} compact />
+          </div>
+
+          {/* Meal plan upload */}
+          <div>
+            <ExamUploader
+              exams={pendingMealPlans || []}
+              onChange={setPendingMealPlans}
+              compact
+              label="Plano alimentar"
+              emptyMessage="Nenhum plano. Anexe o plano atual (importar de outro app ou plano vigente)."
+              idPrefix="plan"
+              buttonColor="emerald"
+            />
           </div>
         </div>
       )}
@@ -1666,8 +1723,9 @@ function TranscriptionView({
                           if (p.isFirstConsultation === false || events.some((e: any) => e.patientId === p.id && e.type !== 'adjustment')) {
                             setTempIsFirst(false);
                           }
-                          // Pre-load the patient's existing exams so nutri sees them and can add more
+                          // Pre-load existing exams + meal plans so nutri sees them
                           if (p.exams?.length) setPendingExams(p.exams);
+                          if (p.mealPlans?.length) setPendingMealPlans(p.mealPlans);
                           setShowPopupSuggestions(false);
                         }}
                       >
@@ -1752,8 +1810,21 @@ function TranscriptionView({
             </div>
 
             {/* Exam upload (optional) */}
-            <div className="mb-5">
+            <div className="mb-4">
               <ExamUploader exams={pendingExams} onChange={setPendingExams} compact />
+            </div>
+
+            {/* Meal plan upload (optional, useful for migration from other apps) */}
+            <div className="mb-5">
+              <ExamUploader
+                exams={pendingMealPlans}
+                onChange={setPendingMealPlans}
+                compact
+                label="Plano alimentar"
+                emptyMessage="Nenhum plano. Anexe o plano atual da paciente (importar de outro app ou plano vigente)."
+                idPrefix="plan"
+                buttonColor="emerald"
+              />
             </div>
 
             {/* Action Buttons */}

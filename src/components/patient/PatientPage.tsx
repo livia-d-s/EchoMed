@@ -4,8 +4,9 @@ import { PatientHeader } from './PatientHeader';
 import { PatientTimeline } from './PatientTimeline';
 import { PatientBriefing } from './PatientBriefing';
 import { PatientExams } from './PatientExams';
+import { PatientMealPlans } from './PatientMealPlans';
 import { AdjustmentModal } from './AdjustmentModal';
-import { PatientExam } from '../../../types';
+import { PatientExam, MealPlan } from '../../../types';
 
 interface PatientPageProps {
   patient: Patient;
@@ -19,6 +20,7 @@ interface PatientPageProps {
   onEditPatient?: (patientId: string, newName: string) => void;
   onUpdateHighlights?: (patientId: string, highlights: string[]) => void;
   onUpdateExams?: (patientId: string, exams: PatientExam[]) => void;
+  onUpdateMealPlans?: (patientId: string, mealPlans: MealPlan[]) => void;
 }
 
 export function PatientPage({
@@ -33,6 +35,7 @@ export function PatientPage({
   onEditPatient,
   onUpdateHighlights,
   onUpdateExams,
+  onUpdateMealPlans,
 }: PatientPageProps) {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
 
@@ -73,6 +76,9 @@ export function PatientPage({
         <PatientBriefing events={patientEvents} />
         {onUpdateExams && (
           <PatientExams patient={patient} onUpdateExams={onUpdateExams} />
+        )}
+        {onUpdateMealPlans && (
+          <PatientMealPlans patient={patient} onUpdateMealPlans={onUpdateMealPlans} />
         )}
         <PatientTimeline
           events={patientEvents}

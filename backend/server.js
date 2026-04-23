@@ -111,7 +111,10 @@ app.post('/api/analyze-medical', apiLimiter, requireAuth, async (req, res) => {
         used += text.length;
       }
       if (parts.length > 0) {
-        examsContext = `\n\n[EXAMES LABORATORIAIS ANEXADOS]\nOs PDFs abaixo foram anexados ao prontuário da paciente. Use os valores e observações nas suas hipóteses. Cruze com queixas/sintomas relatados na consulta (ex: cansaço + ferritina baixa → anemia ferropriva).\n\n${parts.join('\n\n')}`;
+        examsContext = `\n\n[EXAMES LABORATORIAIS ANEXADOS À CONSULTA]
+OBRIGATÓRIO: Você DEVE ler, analisar e mencionar explicitamente os valores destes exames nos campos "clinicalRationale" e "nutritionalAssessment". Cruze valores laboratoriais com as queixas relatadas na transcrição (ex: cansaço + ferritina baixa → anemia ferropriva). Se um exame estiver alterado, use isso como base de hipótese no racional clínico. NÃO ignore os exames.
+
+${parts.join('\n\n')}`;
       }
     }
 
@@ -131,6 +134,13 @@ mas também ao sono, estresse, emoções, rotina de trabalho, nível de atividad
 relacionamentos, saúde mental e contexto de vida.
 
 Tom da resposta: ${toneInstruction}
+
+REGRA CRÍTICA DE FIDELIDADE — NÃO INVENTE NADA:
+- Use APENAS informações que aparecem de forma clara e explícita na transcrição ou nos exames anexados.
+- NÃO adicione sintomas, alimentos, queixas, rotinas ou hábitos que não foram mencionados.
+- Se a paciente não disse algo, NÃO assuma. É melhor devolver uma análise curta e precisa do que detalhada e inventada.
+- Se a transcrição tiver palavras que parecem erros de reconhecimento de voz (palavras cortadas, termos estranhos), tente interpretar pelo contexto, mas NÃO fabrique detalhes para preencher lacunas.
+- Nos campos de listas (patientHighlights, extractedTraining, suggestedNextQuestions), se não há base na transcrição, retorne array vazio [].
 
 Evite julgamentos, rótulos ou conclusões absolutas.
 Trabalhe com hipóteses nutricionais e possíveis causas associadas.

@@ -554,25 +554,42 @@ export default function App() {
       const newEvent = addEventForPatient(patient.id, eventType, aiResponse, currentTranscript);
       setSelectedEvent(newEvent);
 
-      // Merge AI-extracted highlights into patient (max 8 total, no duplicates)
-      if (aiResponse.patientHighlights && aiResponse.patientHighlights.length > 0) {
-        const MAX_HIGHLIGHTS = 8;
-        const existingHighlights = patient.highlights || [];
-        const remaining = MAX_HIGHLIGHTS - existingHighlights.length;
-        if (remaining > 0) {
-          const newHighlights = aiResponse.patientHighlights
+      // Merge AI-extracted highlights + training into patient
+      const MAX_HIGHLIGHTS = 8;
+      const existingHighlights = patient.highlights || [];
+      const remaining = MAX_HIGHLIGHTS - existingHighlights.length;
+
+      const rawHighlights: string[] = Array.isArray(aiResponse.patientHighlights)
+        ? aiResponse.patientHighlights
+        : [];
+      const newHighlights = remaining > 0
+        ? rawHighlights
             .filter((h: string) => !existingHighlights.some(
               (eh: string) => eh.toLowerCase() === h.toLowerCase()
             ))
-            .slice(0, remaining);
+            .slice(0, remaining)
+        : [];
+
+      // Extract training info from AI (only applied if patient has no trainingRoutine yet)
+      const rawTraining = Array.isArray(aiResponse.extractedTraining)
+        ? aiResponse.extractedTraining.filter(
+            (t: any) => t && typeof t.type === 'string' && typeof t.frequency === 'string'
+          )
+        : [];
+
+      if (newHighlights.length > 0 || rawTraining.length > 0) {
+        setPatients(prev => prev.map(p => {
+          if (p.id !== patient.id) return p;
+          const updated: any = { ...p };
           if (newHighlights.length > 0) {
-            setPatients(prev => prev.map(p =>
-              p.id === patient.id
-                ? { ...p, highlights: [...existingHighlights, ...newHighlights] }
-                : p
-            ));
+            updated.highlights = [...existingHighlights, ...newHighlights];
           }
-        }
+          // Only apply extracted training if patient doesn't already have one
+          if (rawTraining.length > 0 && (!p.trainingRoutine || p.trainingRoutine.length === 0)) {
+            updated.trainingRoutine = rawTraining;
+          }
+          return updated;
+        }));
       }
 
       // Update UI immediately (before Firebase which may hang)
@@ -1816,7 +1833,7 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
         <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm mb-3 hover:gap-3 transition-all">
           <ArrowLeft size={16} /> Voltar
         </button>
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-tight mb-1">{title}</h2>
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-tight mb-1 line-clamp-6">{title}</h2>
         <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-xs tracking-widest">
           <User size={14} /> <span>{patientName}</span>
         </div>

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingActivity } from '../types';
 import { PatientList, PatientPage } from './components/patient';
+import { ExamUploader } from './components/patient/ExamUploader';
 
 // Firebase Imports
 import {
@@ -110,6 +111,8 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState<TimelineEvent | null>(null);
   const [doctorProfile, setDoctorProfile] = useState<DoctorProfileType>(DEFAULT_PROFILE);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
+  // Exams uploaded in popup/transcription — applied to the patient on finalize
+  const [pendingExams, setPendingExams] = useState<any[]>([]);
 
   // Load all user-scoped data when user changes (login/logout switch)
   useEffect(() => {
@@ -483,7 +486,17 @@ export default function App() {
         body: JSON.stringify({
           transcript: text + contextInfo,
           patientContext,
-          tone: doctorProfile.preferences?.tone || 'humanizado'
+          tone: doctorProfile.preferences?.tone || 'humanizado',
+          exams: (() => {
+            const pn = (patientContext as any)?.patientName || patientName;
+            if (!pn) return [];
+            const match = patients.find((p: any) => p.name.toLowerCase() === pn.trim().toLowerCase());
+            return (match?.exams || []).map((e: any) => ({
+              fileName: e.fileName,
+              uploadedAt: e.uploadedAt,
+              extractedText: e.extractedText,
+            }));
+          })(),
         })
       });
 
@@ -577,20 +590,33 @@ export default function App() {
           )
         : [];
 
-      if (newHighlights.length > 0 || rawTraining.length > 0) {
+      // Merge pending exams (uploaded in popup/transcription) into the patient,
+      // skipping any that are already on the patient (dedupe by fileName + extractedText length)
+      const existingExams: any[] = (patient as any).exams || [];
+      const newExams = (pendingExams || []).filter(
+        (pe: any) => !existingExams.some(
+          (ee: any) => ee.fileName === pe.fileName && ee.extractedText?.length === pe.extractedText?.length
+        )
+      );
+
+      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0) {
         setPatients(prev => prev.map(p => {
           if (p.id !== patient.id) return p;
           const updated: any = { ...p };
           if (newHighlights.length > 0) {
             updated.highlights = [...existingHighlights, ...newHighlights];
           }
-          // Only apply extracted training if patient doesn't already have one
           if (rawTraining.length > 0 && (!p.trainingRoutine || p.trainingRoutine.length === 0)) {
             updated.trainingRoutine = rawTraining;
+          }
+          if (newExams.length > 0) {
+            updated.exams = [...existingExams, ...newExams];
           }
           return updated;
         }));
       }
+      // Clear pending exams after applying
+      setPendingExams([]);
 
       // Update UI immediately (before Firebase which may hang)
       setCurrentResult(aiResponse);
@@ -681,6 +707,7 @@ export default function App() {
             patientGoalCustom={currentPatientGoalCustom} setPatientGoalCustom={setCurrentPatientGoalCustom}
             patientTraining={currentPatientTraining} setPatientTraining={setCurrentPatientTraining}
             isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
+            pendingExams={pendingExams} setPendingExams={setPendingExams}
           />
         )}
         {view === 'patients' && (
@@ -713,9 +740,16 @@ export default function App() {
               setPatients(prev => prev.map(p =>
                 p.id === patientId ? { ...p, highlights } : p
               ));
-              // Keep selectedPatient in sync
               if (selectedPatient?.id === patientId) {
                 setSelectedPatient(prev => prev ? { ...prev, highlights } : null);
+              }
+            }}
+            onUpdateExams={(patientId: string, exams: any[]) => {
+              setPatients(prev => prev.map(p =>
+                p.id === patientId ? { ...p, exams } : p
+              ));
+              if (selectedPatient?.id === patientId) {
+                setSelectedPatient(prev => prev ? { ...prev, exams } : null);
               }
             }}
             onEventClick={(event) => {
@@ -1008,7 +1042,8 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
 function TranscriptionView({
   autosaveKey, status, setStatus, patientName, setPatientName, transcript, setTranscript, onFinalize, patients, events,
   patientGoals, setPatientGoals, patientGoalCustom, setPatientGoalCustom,
-  patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation
+  patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation,
+  pendingExams, setPendingExams
 }: any) {
   const recognitionRef = useRef<any>(null);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
@@ -1178,6 +1213,7 @@ function TranscriptionView({
       setTempGoalCustom('');
       setTempTraining('');
       setTempIsFirst(null);
+      setPendingExams([]);
       setShowNamePopup(true);
       return false;
     }
@@ -1359,7 +1395,13 @@ function TranscriptionView({
                     key={p.id}
                     type="button"
                     className="w-full px-4 py-3 text-left hover:bg-blue-50 flex items-center gap-3 transition-colors"
-                    onMouseDown={() => { setPatientName(p.name); setShowSuggestions(false); setNameWarning(''); }}
+                    onMouseDown={() => {
+                      setPatientName(p.name);
+                      setShowSuggestions(false);
+                      setNameWarning('');
+                      // Pre-load existing patient exams so nutri can see/add more
+                      if (p.exams?.length) setPendingExams(p.exams);
+                    }}
                   >
                     <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm">
                       {p.name.charAt(0).toUpperCase()}
@@ -1465,6 +1507,11 @@ function TranscriptionView({
               onChange={(e) => setInlineTrainingText(e.target.value)}
               onBlur={() => setPatientTraining(parseTraining(inlineTrainingText))}
             />
+          </div>
+
+          {/* Exam upload */}
+          <div className="pt-1">
+            <ExamUploader exams={pendingExams || []} onChange={setPendingExams} compact />
           </div>
         </div>
       )}
@@ -1598,6 +1645,8 @@ function TranscriptionView({
                           if (p.isFirstConsultation === false || events.some((e: any) => e.patientId === p.id && e.type !== 'adjustment')) {
                             setTempIsFirst(false);
                           }
+                          // Pre-load the patient's existing exams so nutri sees them and can add more
+                          if (p.exams?.length) setPendingExams(p.exams);
                           setShowPopupSuggestions(false);
                         }}
                       >
@@ -1668,7 +1717,7 @@ function TranscriptionView({
             </div>
 
             {/* Training Routine (Optional) */}
-            <div className="mb-5">
+            <div className="mb-4">
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                 Rotina de Treino <span className="text-slate-300 font-normal">(opcional)</span>
               </label>
@@ -1679,6 +1728,11 @@ function TranscriptionView({
                 value={tempTraining}
                 onChange={(e) => setTempTraining(e.target.value)}
               />
+            </div>
+
+            {/* Exam upload (optional) */}
+            <div className="mb-5">
+              <ExamUploader exams={pendingExams} onChange={setPendingExams} compact />
             </div>
 
             {/* Action Buttons */}

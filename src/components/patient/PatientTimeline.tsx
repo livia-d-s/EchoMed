@@ -90,7 +90,7 @@ export function PatientTimeline({ events, onEventClick, onDeleteEvent, onEditEve
   const eventGroups = groupedEvents();
 
   return (
-    <div className="max-w-2xl">
+    <div className="w-full">
       {/* Section Header */}
       <div className="flex items-center gap-2 mb-6">
         <div className="w-1 h-6 bg-blue-600 rounded-full" />

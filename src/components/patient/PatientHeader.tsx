@@ -110,7 +110,7 @@ export function PatientHeader({
   return (
     <div className="bg-white border-b border-slate-200 -mx-3 md:-mx-8 px-3 md:px-8 py-4 md:py-6 mb-4 md:mb-6
                     sticky top-[57px] md:top-[73px] z-30 backdrop-blur-sm bg-white/95">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Back button */}
         <button
           onClick={onBack}

@@ -146,8 +146,8 @@ export function TimelineItem({ event, onClick, onDelete, onEdit, isConnected }: 
             {formatDate(event.date)}
           </span>
           <span
-            className={`text-xs font-bold uppercase tracking-wider px-2.5 py-1
-                        rounded-full ${config.badgeBg} ${config.badgeText}`}
+            className={`text-[10px] font-bold uppercase tracking-wider px-3 py-1.5
+                        rounded-full whitespace-nowrap ${config.badgeBg} ${config.badgeText}`}
           >
             {config.label}
           </span>

@@ -6,6 +6,7 @@ import {
 import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingActivity } from '../types';
 import { PatientList, PatientPage } from './components/patient';
 import { ExamUploader } from './components/patient/ExamUploader';
+import { ConsultationBriefingBubble } from './components/patient/ConsultationBriefingBubble';
 
 // Firebase Imports
 import {
@@ -747,22 +748,29 @@ export default function App() {
 
       <main className="max-w-6xl mx-auto px-3 py-4 md:p-8 pb-24">
         {view === 'transcription' && (
-          <TranscriptionView
-            autosaveKey={userId ? `echomed_${userId}_autosave` : null}
-            status={status} setStatus={setStatus}
-            patientName={patientName} setPatientName={setPatientName}
-            transcript={currentTranscript} setTranscript={setCurrentTranscript}
-            onFinalize={finalizeConsultation}
-            patients={patients}
-            events={events}
-            // Patient context (supports up to 2 goals)
-            patientGoals={currentPatientGoals} setPatientGoals={setCurrentPatientGoals}
-            patientGoalCustom={currentPatientGoalCustom} setPatientGoalCustom={setCurrentPatientGoalCustom}
-            patientTraining={currentPatientTraining} setPatientTraining={setCurrentPatientTraining}
-            isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
-            pendingExams={pendingExams} setPendingExams={setPendingExams}
-            pendingMealPlans={pendingMealPlans} setPendingMealPlans={setPendingMealPlans}
-          />
+          <>
+            <TranscriptionView
+              autosaveKey={userId ? `echomed_${userId}_autosave` : null}
+              status={status} setStatus={setStatus}
+              patientName={patientName} setPatientName={setPatientName}
+              transcript={currentTranscript} setTranscript={setCurrentTranscript}
+              onFinalize={finalizeConsultation}
+              patients={patients}
+              events={events}
+              // Patient context (supports up to 2 goals)
+              patientGoals={currentPatientGoals} setPatientGoals={setCurrentPatientGoals}
+              patientGoalCustom={currentPatientGoalCustom} setPatientGoalCustom={setCurrentPatientGoalCustom}
+              patientTraining={currentPatientTraining} setPatientTraining={setCurrentPatientTraining}
+              isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
+              pendingExams={pendingExams} setPendingExams={setPendingExams}
+              pendingMealPlans={pendingMealPlans} setPendingMealPlans={setPendingMealPlans}
+            />
+            <ConsultationBriefingBubble
+              events={events}
+              patientName={patientName}
+              patients={patients}
+            />
+          </>
         )}
         {view === 'patients' && (
           <PatientList

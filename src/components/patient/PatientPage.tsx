@@ -2,7 +2,6 @@ import React, { useState, useMemo } from 'react';
 import { Patient, TimelineEvent } from '../../../types';
 import { PatientHeader } from './PatientHeader';
 import { PatientTimeline } from './PatientTimeline';
-import { PatientBriefing } from './PatientBriefing';
 import { PatientExams } from './PatientExams';
 import { PatientMealPlans } from './PatientMealPlans';
 import { AdjustmentModal } from './AdjustmentModal';
@@ -73,7 +72,6 @@ export function PatientPage({
       />
 
       <div className="max-w-6xl mx-auto">
-        <PatientBriefing events={patientEvents} />
         {onUpdateExams && (
           <PatientExams patient={patient} onUpdateExams={onUpdateExams} />
         )}

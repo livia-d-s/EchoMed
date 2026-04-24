@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Mic, Square, Pause, Play, Activity, User, FileText,
-  ArrowLeft, Camera, Check, AlertTriangle, Loader2, Users, Pencil, Info, CheckCircle, Trash2
+  ArrowLeft, Camera, Check, AlertTriangle, Loader2, Users, Pencil, Info, CheckCircle, Trash2,
+  ClipboardCheck, TrendingUp, Brain, Stethoscope, TestTube
 } from 'lucide-react';
 import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingActivity } from '../types';
 import { PatientList, PatientPage } from './components/patient';
@@ -1980,61 +1981,107 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
     </button>
   );
 
+  // Adherence & behavioral insights
+  const adherence: string = (result.adherenceProbability || '').toString().toLowerCase();
+  const behavior: string = (result.behavioralProfile || '').toString();
+  const adherenceStyle = {
+    alta: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+    'média': 'bg-amber-50 text-amber-800 border-amber-200',
+    media: 'bg-amber-50 text-amber-800 border-amber-200',
+    baixa: 'bg-rose-50 text-rose-800 border-rose-200',
+  }[adherence] || 'bg-slate-50 text-slate-700 border-slate-200';
+
+  // Exam priority (preserved from original)
+  const priorityStyle = (index: number): { label: string; dot: string; badge: string } => {
+    if (index === 0) return {
+      label: 'Alta',
+      dot: 'bg-rose-400',
+      badge: 'bg-rose-50 text-rose-700 border-rose-100',
+    };
+    if (index === 1) return {
+      label: 'Média',
+      dot: 'bg-amber-400',
+      badge: 'bg-amber-50 text-amber-700 border-amber-100',
+    };
+    return {
+      label: 'Complementar',
+      dot: 'bg-sky-400',
+      badge: 'bg-sky-50 text-sky-700 border-sky-100',
+    };
+  };
+
   return (
     <div className="space-y-5 pb-20 animate-in fade-in zoom-in-95 duration-500">
-      {/* Header */}
-      <div>
-        <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm mb-3 hover:gap-3 transition-all">
-          <ArrowLeft size={16} /> Voltar
-        </button>
-        <h2 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight leading-tight mb-1 line-clamp-6">{title}</h2>
-        <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-xs tracking-widest">
-          <User size={14} /> <span>{patientName}</span>
+      {/* Back button */}
+      <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm hover:gap-3 transition-all">
+        <ArrowLeft size={16} /> Voltar
+      </button>
+
+      {/* Elegant header */}
+      <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-8 shadow-sm">
+        <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mb-3">
+          <User size={12} /> <span>{patientName}</span>
         </div>
+        <h2 className="text-xl sm:text-2xl md:text-[1.75rem] font-black tracking-tight leading-[1.3] text-slate-900 mb-4 line-clamp-6">
+          {title}
+        </h2>
+        {(adherence || behavior) && (
+          <div className="flex flex-wrap gap-2">
+            {adherence && (
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${adherenceStyle}`}>
+                <TrendingUp size={11} />
+                Adesão provável: <span className="capitalize">{adherence}</span>
+              </span>
+            )}
+            {behavior && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border bg-slate-50 text-slate-700 border-slate-200">
+                <Brain size={11} />
+                Perfil: <span className="capitalize">{behavior}</span>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Racional Clínico + Conduta Nutricional (unified card) */}
-      <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 overflow-hidden">
-        {/* Racional Clínico */}
-        <div className="p-4 sm:p-6 md:p-8 group relative">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-blue-600 font-black uppercase text-[10px] tracking-widest flex items-center gap-2">
-              <Activity size={14} /> Racional Clínico
-            </h3>
-            {editingSection !== 'rationale' && <EditButton section="rationale" />}
-          </div>
-          {editingSection === 'rationale' ? (
-            <div className="space-y-3">
-              <textarea
-                value={editedRationale}
-                onChange={(e) => setEditedRationale(e.target.value)}
-                className="w-full p-3 md:p-4 border border-slate-200 rounded-xl text-base md:text-lg text-slate-700 leading-relaxed resize-none focus:ring-2 focus:ring-blue-100 outline-none"
-                rows={4}
-              />
-              <div className="flex gap-2 justify-end">
-                <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                <button onClick={saveEditing} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar</button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-base md:text-lg text-slate-700 leading-relaxed">{rationale}</p>
-          )}
+      {/* Racional Clínico */}
+      <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-8 shadow-sm group relative">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-blue-700 font-black uppercase text-[10px] tracking-[0.2em] flex items-center gap-2">
+            <Activity size={13} /> Racional Clínico
+          </h3>
+          {editingSection !== 'rationale' && <EditButton section="rationale" />}
         </div>
+        {editingSection === 'rationale' ? (
+          <div className="space-y-3">
+            <textarea
+              value={editedRationale}
+              onChange={(e) => setEditedRationale(e.target.value)}
+              className="w-full p-3 md:p-4 border border-slate-200 rounded-xl text-[15px] text-slate-700 leading-[1.75] resize-none focus:ring-2 focus:ring-blue-100 outline-none"
+              rows={5}
+            />
+            <div className="flex gap-2 justify-end">
+              <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
+              <button onClick={saveEditing} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar</button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[15px] md:text-base text-slate-700 leading-[1.75] whitespace-pre-line">
+            {rationale}
+          </p>
+        )}
+      </div>
 
-        {/* Divider */}
-        {prefs.showConduct && <div className="border-t border-slate-100" />}
-
-        {/* Conduta Nutricional */}
-        {prefs.showConduct && <div className="bg-slate-900 text-white p-4 sm:p-6 md:p-8 group relative">
-          <div className="flex items-center justify-between mb-4 md:mb-6">
-            <h3 className="text-blue-400 font-black uppercase text-[10px] tracking-widest flex items-center gap-2">
-              <Check size={14} /> Conduta Nutricional
+      {/* Conduta Nutricional - light clinical checklist */}
+      {prefs.showConduct && (
+        <div className="bg-gradient-to-br from-emerald-50/60 to-teal-50/40 rounded-2xl md:rounded-3xl border border-emerald-100 p-5 md:p-8 shadow-sm group relative">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="text-emerald-700 font-black uppercase text-[10px] tracking-[0.2em] flex items-center gap-2">
+              <ClipboardCheck size={13} /> Conduta Nutricional
             </h3>
             {editingSection !== 'conduct' && (
               <button
                 onClick={() => startEditing('conduct')}
-                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-blue-400
-                           hover:bg-slate-800 rounded-lg transition-all"
+                className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-100/50 rounded-lg transition-all"
               >
                 <Pencil size={12} />
               </button>
@@ -2045,86 +2092,40 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
               <textarea
                 value={editedConduct}
                 onChange={(e) => setEditedConduct(e.target.value)}
-                className="w-full p-3 md:p-4 bg-slate-800 border border-slate-700 rounded-xl text-base md:text-lg text-white leading-relaxed resize-none focus:ring-2 focus:ring-blue-400 outline-none"
+                className="w-full p-3 md:p-4 bg-white border border-emerald-200 rounded-xl text-[15px] text-slate-800 leading-[1.75] resize-none focus:ring-2 focus:ring-emerald-100 outline-none"
                 rows={6}
                 placeholder="Separe os passos por ponto e vírgula (;) ou numere (1. 2. 3.)"
               />
               <div className="flex gap-2 justify-end">
-                <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-slate-400 hover:bg-slate-800 rounded-lg">Cancelar</button>
-                <button onClick={saveEditing} className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">Salvar</button>
+                <button onClick={cancelEditing} className="px-3 py-1.5 text-sm text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                <button onClick={saveEditing} className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Salvar</button>
               </div>
             </div>
           ) : (
-            <div className="space-y-3 md:space-y-4">
+            <ul className="space-y-3">
               {conductSteps.map((step, i) => (
-                <div key={i} className="flex gap-3 md:gap-4">
-                  <div className="flex-shrink-0 w-7 h-7 md:w-8 md:h-8 rounded-full bg-blue-500/20 border border-blue-400/30
-                                  flex items-center justify-center text-blue-400 font-black text-xs md:text-sm">
-                    {i + 1}
+                <li key={i} className="flex gap-3 items-start">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-white border-2 border-emerald-400 flex items-center justify-center mt-0.5 shadow-sm">
+                    <Check size={12} className="text-emerald-600" strokeWidth={3} />
                   </div>
-                  <p className="text-base md:text-lg leading-relaxed pt-0.5 text-slate-100">{step.trim().replace(/\.$/, '')}</p>
-                </div>
+                  <p className="text-[15px] md:text-base leading-[1.65] text-slate-800 flex-1">
+                    {step.trim().replace(/\.$/, '')}
+                  </p>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>}
-      </div>
+        </div>
+      )}
 
-      {/* Bottom cards row */}
+      {/* Bottom grid: Exams + Attention */}
       <div className="grid sm:grid-cols-2 gap-4 md:gap-5">
-        {/* Associated Conditions */}
-        {prefs.showAttention && (conditions.length > 0 || editingSection === 'conditions') && (
-          <div className="bg-white p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 group relative">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <h3 className="font-black text-[10px] uppercase tracking-widest text-amber-600 flex items-center gap-2">
-                <AlertTriangle size={14} /> Pontos de Atenção
-              </h3>
-              {editingSection !== 'conditions' && <EditButton section="conditions" />}
-            </div>
-            {editingSection === 'conditions' ? (
-              <div className="space-y-2">
-                {editedConditions.map((c, i) => (
-                  <input
-                    key={i}
-                    value={c}
-                    onChange={(e) => {
-                      const updated = [...editedConditions];
-                      updated[i] = e.target.value;
-                      setEditedConditions(updated);
-                    }}
-                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
-                  />
-                ))}
-                <div className="flex gap-2 justify-end mt-3">
-                  <button onClick={cancelEditing} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
-                  <button onClick={saveEditing} className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-600">Salvar</button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {conditions.map((d: string, i: number) => (
-                  <div key={i} className="p-2.5 md:p-3 bg-amber-50 rounded-xl border border-amber-100 font-medium text-slate-700 text-sm flex items-center justify-between gap-2 group/item">
-                    <span>{d}</span>
-                    <button
-                      onClick={() => setDeleteConfirm({ type: 'condition', index: i })}
-                      className="opacity-0 group-hover/item:opacity-50 hover:!opacity-100 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
-                      title="Excluir"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Exams - Priority Ordered (colors preserved) */}
+        {/* Exames Sugeridos — elegant priority cards */}
         {prefs.showExams && (exams.length > 0 || editingSection === 'exams') && (
-          <div className="bg-white p-4 sm:p-5 md:p-6 rounded-2xl md:rounded-3xl border border-slate-200 group relative">
-            <div className="flex items-center justify-between mb-3 md:mb-4">
-              <h3 className="font-black text-[10px] uppercase tracking-widest text-slate-500 flex items-center gap-2">
-                <FileText size={14} /> Exames Sugeridos
+          <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-6 shadow-sm group relative">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-sky-700 flex items-center gap-2">
+                <TestTube size={13} /> Exames Sugeridos
               </h3>
               {editingSection !== 'exams' && <EditButton section="exams" />}
             </div>
@@ -2150,17 +2151,19 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
             ) : (
               <div className="space-y-2">
                 {exams.map((e: string, i: number) => {
-                  const priority = getPriorityLabel(i);
+                  const p = priorityStyle(i);
                   return (
-                    <div key={i} className="flex items-start gap-3 p-2.5 md:p-3 bg-slate-50 rounded-xl group/item">
-                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${priority.color}`} />
+                    <div key={i} className="flex items-start gap-3 p-3 bg-slate-50/70 rounded-xl border border-slate-100 hover:border-slate-200 transition-colors group/item">
+                      <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${p.dot}`} />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-slate-700 text-sm">{e}</p>
-                        <span className="text-[10px] text-slate-400 uppercase tracking-wider">{priority.label}</span>
+                        <p className="font-semibold text-slate-800 text-[13px] leading-snug">{e}</p>
+                        <span className={`inline-block mt-1.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider border ${p.badge}`}>
+                          {p.label}
+                        </span>
                       </div>
                       <button
                         onClick={() => setDeleteConfirm({ type: 'exam', index: i })}
-                        className="opacity-0 group-hover/item:opacity-50 hover:!opacity-100 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0 mt-0.5"
+                        className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
                         title="Excluir"
                       >
                         <Trash2 size={12} />
@@ -2172,12 +2175,60 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
             )}
           </div>
         )}
+
+        {/* Pontos de Atenção — clinical tags */}
+        {prefs.showAttention && (conditions.length > 0 || editingSection === 'conditions') && (
+          <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-6 shadow-sm group relative">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-amber-700 flex items-center gap-2">
+                <AlertTriangle size={13} /> Pontos de Atenção
+              </h3>
+              {editingSection !== 'conditions' && <EditButton section="conditions" />}
+            </div>
+            {editingSection === 'conditions' ? (
+              <div className="space-y-2">
+                {editedConditions.map((c, i) => (
+                  <input
+                    key={i}
+                    value={c}
+                    onChange={(e) => {
+                      const updated = [...editedConditions];
+                      updated[i] = e.target.value;
+                      setEditedConditions(updated);
+                    }}
+                    className="w-full p-2 border border-slate-200 rounded-lg text-sm"
+                  />
+                ))}
+                <div className="flex gap-2 justify-end mt-3">
+                  <button onClick={cancelEditing} className="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 rounded-lg">Cancelar</button>
+                  <button onClick={saveEditing} className="px-3 py-1.5 text-xs bg-amber-500 text-white rounded-lg hover:bg-amber-600">Salvar</button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {conditions.map((d: string, i: number) => (
+                  <div key={i} className="flex items-start gap-2.5 p-3 bg-amber-50/60 rounded-xl border border-amber-100 group/item">
+                    <div className="flex-shrink-0 w-1 self-stretch bg-amber-400 rounded-full" />
+                    <p className="font-medium text-slate-700 text-[13px] leading-snug flex-1">{d}</p>
+                    <button
+                      onClick={() => setDeleteConfirm({ type: 'condition', index: i })}
+                      className="opacity-0 group-hover/item:opacity-60 hover:!opacity-100 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all flex-shrink-0"
+                      title="Excluir"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Ethical Disclaimer */}
-      <div className="flex items-start gap-2 pt-3 border-t border-slate-100">
-        <Info size={12} className="text-slate-300 mt-0.5 flex-shrink-0" />
-        <p className="text-[11px] text-slate-300 leading-relaxed">
+      <div className="flex items-start gap-2 pt-3">
+        <Info size={11} className="text-slate-300 mt-0.5 flex-shrink-0" />
+        <p className="text-[10px] text-slate-400 leading-relaxed">
           Análise gerada por inteligência artificial como suporte à decisão clínica.
           O profissional de saúde é responsável pela validação e conduta final.
         </p>

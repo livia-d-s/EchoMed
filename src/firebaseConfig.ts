@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Safe environment variable access with fallback
@@ -48,3 +53,10 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const googleProvider = new GoogleAuthProvider();
+
+// Persist auth in IndexedDB so the user stays logged in after closing the tab.
+// Without this, some browsers/setups (e.g. Cloudflare in front, strict cookie
+// settings, safari mobile) fall back to SESSION persistence and log the user out.
+setPersistence(auth, browserLocalPersistence).catch((err) => {
+  console.warn("Failed to set auth persistence to LOCAL:", err);
+});

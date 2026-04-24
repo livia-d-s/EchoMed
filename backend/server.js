@@ -172,7 +172,9 @@ sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
   "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada",
   "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"],
   "extractedTraining": [{"type": "Musculação", "frequency": "4x/semana"}],
-  "suggestedNextQuestions": ["sugestão 1", "sugestão 2", "sugestão 3"]
+  "suggestedNextQuestions": ["sugestão 1", "sugestão 2", "sugestão 3"],
+  "adherenceProbability": "alta",
+  "behavioralProfile": "resistente"
 }
 
 Regras para o campo nutritionalAssessment:
@@ -206,6 +208,17 @@ Regras para o campo suggestedNextQuestions:
   * "Perguntar sobre qualidade do sono dela após o ajuste do jantar — alimentação noturna pesada pode estar impactando a recuperação"
   * "Explorar com ela estratégias de meal prep — a rotina corrida dificulta refeições saudáveis, e pequenos preparos antecipados podem facilitar a adesão"
 - Se a transcrição for muito curta, retorne array vazio []
+
+Regras para o campo adherenceProbability:
+- Valor obrigatório: "alta", "média" ou "baixa" (minúsculo)
+- Baseie-se em sinais: comprometimento com autocuidado, histórico de seguir planos, organização, motivação demonstrada, pressão de tempo, nível de conhecimento
+- Se não há dados suficientes para inferir, use "média"
+
+Regras para o campo behavioralProfile:
+- UMA ÚNICA PALAVRA (adjetivo) descrevendo o perfil comportamental
+- Exemplos: "resistente", "motivada", "ansiosa", "oscilante", "comprometida", "analítica", "impulsiva", "conservadora", "ambivalente"
+- Escolha o adjetivo mais representativo com base na fala/postura da paciente
+- Se não há dados suficientes, retorne "neutra"
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

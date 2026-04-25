@@ -840,7 +840,7 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} doctorProfile={doctorProfile} consultationDate={selectedEvent?.date} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
       </main>
 
       {/* Profile Popup */}
@@ -2016,7 +2016,7 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate }: any) {
   const prefs = preferences || { showConduct: true, showAttention: true, showExams: true };
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
@@ -2024,6 +2024,28 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [editedConditions, setEditedConditions] = useState<string[]>([]);
   const [editedExams, setEditedExams] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'condition' | 'exam'; index: number } | null>(null);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | null>(null);
+
+  const handleDownload = async (kind: 'exams' | 'conduct') => {
+    if (!result) return;
+    setDownloadOpen(false);
+    setGeneratingPdf(kind);
+    try {
+      const { generateExamRequestPdf, generateConductPdf } = await import('./utils/pdfGenerator');
+      const profile = doctorProfile || {};
+      if (kind === 'exams') {
+        await generateExamRequestPdf(result, patientName, consultationDate, profile);
+      } else {
+        await generateConductPdf(result, patientName, consultationDate, profile);
+      }
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
 
   if (!result) return null;
 
@@ -2169,10 +2191,53 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
 
   return (
     <div className="space-y-5 pb-20 animate-in fade-in zoom-in-95 duration-500">
-      {/* Back button */}
-      <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm hover:gap-3 transition-all">
-        <ArrowLeft size={16} /> Voltar
-      </button>
+      {/* Top bar: back + download */}
+      <div className="flex items-center justify-between gap-3">
+        <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm hover:gap-3 transition-all">
+          <ArrowLeft size={16} /> Voltar
+        </button>
+        {/* Download dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setDownloadOpen((v) => !v)}
+            disabled={!!generatingPdf}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors disabled:opacity-60"
+          >
+            {generatingPdf ? (
+              <><Loader2 size={14} className="animate-spin" /> Gerando…</>
+            ) : (
+              <><FileText size={14} /> Baixar PDF</>
+            )}
+          </button>
+          {downloadOpen && !generatingPdf && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setDownloadOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  onClick={() => handleDownload('exams')}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100"
+                >
+                  <TestTube size={16} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Pedido de Exames</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Solicitação para o laboratório</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleDownload('conduct')}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <ClipboardCheck size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Conduta Nutricional</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Orientações para o paciente</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Elegant header */}
       <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-8 shadow-sm">

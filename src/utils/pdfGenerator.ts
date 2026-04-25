@@ -1,0 +1,321 @@
+// PDF generator using pdfmake (dynamic import keeps initial bundle small)
+
+interface NutriProfile {
+  name?: string;
+  specialty?: string;
+  crm?: string;
+  logoUrl?: string | null;
+  brandColor?: string;
+}
+
+interface AnalysisResult {
+  nutritionalAssessment?: string;
+  clinicalRationale?: string;
+  recommendedExams?: string[];
+  nutritionalConduct?: string;
+  possibleAssociatedConditions?: string[];
+}
+
+const DEFAULT_BRAND = '#2563EB';
+
+const formatDate = (d: any): string => {
+  try {
+    if (!d) return '';
+    let date: Date;
+    if (d.toDate) date = d.toDate();
+    else if (d.seconds) date = new Date(d.seconds * 1000);
+    else date = new Date(d);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+    });
+  } catch {
+    return '';
+  }
+};
+
+const sanitize = (s: string): string => s.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_');
+
+// Parse conduct text into clean numbered/sequential items (mirrors the in-app logic)
+const parseSteps = (text?: string): string[] => {
+  if (!text) return [];
+  const numberedPattern = /\d+\.\s*/;
+  if (numberedPattern.test(text)) {
+    return text.split(numberedPattern).filter((s) => s.trim().length > 0);
+  }
+  if (text.includes(';')) {
+    return text.split(';').map((s) => s.trim()).filter((s) => s.length > 0);
+  }
+  const sentences = text.split(/\.\s+/).filter((s) => s.trim().length > 10);
+  return sentences.length > 1 ? sentences : [text];
+};
+
+// Lazy loader for pdfmake (~600KB chunk; only loaded when nutri actually downloads)
+async function loadPdfMake(): Promise<any> {
+  const [{ default: pdfMake }, fontsModule] = await Promise.all([
+    import('pdfmake/build/pdfmake' as any),
+    import('pdfmake/build/vfs_fonts' as any),
+  ]);
+  // pdfmake expects vfs to be set on the instance
+  const fonts: any = fontsModule;
+  pdfMake.vfs = fonts.pdfMake?.vfs || fonts.default?.pdfMake?.vfs || fonts.vfs || fonts.default?.vfs;
+  return pdfMake;
+}
+
+function buildHeader(profile: NutriProfile, brand: string): any[] {
+  const profileText: any[] = [
+    { text: profile.name || 'Nutricionista', style: 'nutriName' },
+  ];
+  const specialtyParts: string[] = [];
+  if (profile.specialty) specialtyParts.push(profile.specialty);
+  if (profile.crm) specialtyParts.push(`CRN ${profile.crm}`);
+  if (specialtyParts.length > 0) {
+    profileText.push({ text: specialtyParts.join('  •  '), style: 'nutriDetails' });
+  }
+
+  const headerColumns: any = {
+    columns: [
+      // Left: logo (if any)
+      profile.logoUrl
+        ? {
+            image: profile.logoUrl,
+            fit: [110, 50],
+            alignment: 'left',
+            width: 'auto',
+          }
+        : { text: '', width: 'auto' },
+      // Right: nutri info, right-aligned
+      {
+        stack: profileText,
+        alignment: 'right',
+      },
+    ],
+    margin: [0, 0, 0, 12],
+  };
+
+  return [
+    headerColumns,
+    {
+      canvas: [
+        { type: 'line', x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 2, lineColor: brand },
+      ],
+      margin: [0, 0, 0, 16],
+    },
+  ];
+}
+
+function buildPatientBlock(patientName: string, dateStr: string, brand: string): any {
+  return {
+    columns: [
+      {
+        stack: [
+          { text: 'PACIENTE', style: 'tinyLabel', color: brand },
+          { text: patientName, style: 'patientName' },
+        ],
+      },
+      {
+        stack: [
+          { text: 'DATA', style: 'tinyLabel', color: brand, alignment: 'right' },
+          { text: dateStr, style: 'patientName', alignment: 'right' },
+        ],
+      },
+    ],
+    margin: [0, 0, 0, 24],
+  };
+}
+
+function commonStyles(brand: string): Record<string, any> {
+  return {
+    nutriName: { fontSize: 12, bold: true, color: '#0F172A' },
+    nutriDetails: { fontSize: 9, color: '#64748B' },
+    documentTitle: {
+      fontSize: 22,
+      bold: true,
+      color: brand,
+      margin: [0, 0, 0, 6],
+    },
+    sectionHeader: {
+      fontSize: 9,
+      bold: true,
+      color: brand,
+      characterSpacing: 1.5,
+      margin: [0, 14, 0, 6],
+    },
+    tinyLabel: {
+      fontSize: 7,
+      bold: true,
+      characterSpacing: 1.5,
+    },
+    patientName: { fontSize: 13, bold: true, color: '#0F172A' },
+    body: { fontSize: 11, color: '#334155', lineHeight: 1.5 },
+    examItem: { fontSize: 11, color: '#0F172A', margin: [0, 0, 0, 4] },
+    priorityBadge: { fontSize: 7, bold: true, characterSpacing: 1, color: '#FFFFFF' },
+    footer: { fontSize: 7, color: '#94A3B8', alignment: 'center' },
+    disclaimer: { fontSize: 8, color: '#94A3B8', italics: true, margin: [0, 16, 0, 0] },
+  };
+}
+
+function buildFooter(brand: string): any {
+  return (currentPage: number, pageCount: number) => ({
+    columns: [
+      { text: 'Gerado via EchoNutri', style: 'footer', alignment: 'left', margin: [40, 0, 0, 0] },
+      { text: `${currentPage} / ${pageCount}`, style: 'footer', alignment: 'right', margin: [0, 0, 40, 0] },
+    ],
+    margin: [0, 16, 0, 0],
+    color: brand,
+  });
+}
+
+export async function generateExamRequestPdf(
+  result: AnalysisResult,
+  patientName: string,
+  consultationDate: any,
+  profile: NutriProfile,
+): Promise<void> {
+  const brand = profile.brandColor || DEFAULT_BRAND;
+  const exams = result.recommendedExams || [];
+  const dateStr = formatDate(consultationDate) || formatDate(new Date());
+
+  const examPriorityLabel = (i: number): string => {
+    if (i === 0) return 'Alta';
+    if (i === 1) return 'Média';
+    return 'Complementar';
+  };
+
+  const examPriorityColor = (i: number): string => {
+    if (i === 0) return '#E11D48';
+    if (i === 1) return '#D97706';
+    return '#0EA5E9';
+  };
+
+  const examTable = {
+    table: {
+      widths: ['*', 'auto'],
+      body: [
+        ...exams.map((exam, i) => [
+          { text: `•  ${exam}`, style: 'examItem', margin: [0, 6, 0, 6] },
+          {
+            text: examPriorityLabel(i).toUpperCase(),
+            style: 'priorityBadge',
+            fillColor: examPriorityColor(i),
+            alignment: 'center',
+            margin: [8, 6, 8, 6],
+          },
+        ]),
+      ],
+    },
+    layout: {
+      hLineWidth: () => 0.5,
+      vLineWidth: () => 0,
+      hLineColor: () => '#E2E8F0',
+      paddingLeft: () => 0,
+      paddingRight: () => 0,
+    },
+  };
+
+  const docDef: any = {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 40],
+    content: [
+      ...buildHeader(profile, brand),
+      { text: 'PEDIDO DE EXAMES', style: 'tinyLabel', color: brand },
+      { text: 'Solicitação Laboratorial', style: 'documentTitle' },
+      buildPatientBlock(patientName || 'Paciente', dateStr, brand),
+      { text: 'Solicito a realização dos seguintes exames:', style: 'body', margin: [0, 0, 0, 14] },
+      exams.length > 0
+        ? examTable
+        : { text: 'Nenhum exame foi sugerido nesta análise.', style: 'body', italics: true },
+      {
+        text:
+          'Após a coleta dos resultados, a paciente deverá retornar para reavaliação e ajuste do plano nutricional.',
+        style: 'body',
+        margin: [0, 24, 0, 0],
+      },
+      {
+        canvas: [{ type: 'line', x1: 0, y1: 8, x2: 240, y2: 8, lineWidth: 0.5, lineColor: '#94A3B8' }],
+        margin: [0, 80, 0, 4],
+      },
+      { text: profile.name || 'Nutricionista', style: 'patientName' },
+      {
+        text: [
+          profile.specialty || '',
+          profile.crm ? `  •  CRN ${profile.crm}` : '',
+        ].join(''),
+        style: 'nutriDetails',
+      },
+    ],
+    styles: commonStyles(brand),
+    footer: buildFooter(brand),
+    defaultStyle: { font: 'Roboto' },
+  };
+
+  const pdfMake = await loadPdfMake();
+  const fileName = `Pedido_Exames_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
+  pdfMake.createPdf(docDef).download(fileName);
+}
+
+export async function generateConductPdf(
+  result: AnalysisResult,
+  patientName: string,
+  consultationDate: any,
+  profile: NutriProfile,
+): Promise<void> {
+  const brand = profile.brandColor || DEFAULT_BRAND;
+  const dateStr = formatDate(consultationDate) || formatDate(new Date());
+  const conductSteps = parseSteps(result.nutritionalConduct);
+  const attentionPoints = result.possibleAssociatedConditions || [];
+
+  const conductList = conductSteps.length > 0
+    ? {
+        ol: conductSteps.map((s) => ({
+          text: s.trim().replace(/\.$/, ''),
+          margin: [0, 0, 0, 8],
+        })),
+        style: 'body',
+      }
+    : { text: 'Sem conduta registrada.', style: 'body', italics: true };
+
+  const docDef: any = {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 40],
+    content: [
+      ...buildHeader(profile, brand),
+      { text: 'CONDUTA NUTRICIONAL', style: 'tinyLabel', color: brand },
+      { text: 'Orientações da Consulta', style: 'documentTitle' },
+      buildPatientBlock(patientName || 'Paciente', dateStr, brand),
+
+      ...(result.nutritionalAssessment
+        ? [
+            { text: 'AVALIAÇÃO', style: 'sectionHeader' },
+            { text: result.nutritionalAssessment, style: 'body' },
+          ]
+        : []),
+
+      { text: 'CONDUTA', style: 'sectionHeader' },
+      conductList,
+
+      ...(attentionPoints.length > 0
+        ? [
+            { text: 'PONTOS DE ATENÇÃO', style: 'sectionHeader' },
+            {
+              ul: attentionPoints.map((p) => ({ text: p, margin: [0, 0, 0, 4] })),
+              style: 'body',
+            },
+          ]
+        : []),
+
+      {
+        text:
+          'Documento informativo para acompanhamento nutricional. Não substitui orientação médica para condições clínicas.',
+        style: 'disclaimer',
+      },
+    ],
+    styles: commonStyles(brand),
+    footer: buildFooter(brand),
+    defaultStyle: { font: 'Roboto' },
+  };
+
+  const pdfMake = await loadPdfMake();
+  const fileName = `Conduta_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
+  pdfMake.createPdf(docDef).download(fileName);
+}

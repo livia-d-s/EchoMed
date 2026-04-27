@@ -64,6 +64,9 @@ type DoctorProfileType = {
   specialty: string;
   photo: string | null;
   crm: string;
+  // Visual identity for branded PDFs
+  logoUrl?: string | null;       // Base64 data URL (PNG/JPG)
+  brandColor?: string;            // Hex color, e.g. "#2563EB"
   preferences?: {
     showConduct: boolean;
     showAttention: boolean;
@@ -72,11 +75,15 @@ type DoctorProfileType = {
   };
 };
 
+const DEFAULT_BRAND_COLOR = '#2563EB';
+
 const DEFAULT_PROFILE: DoctorProfileType = {
   name: "Nutricionista",
   specialty: "Nutrição Clínica",
   photo: null,
   crm: "",
+  logoUrl: null,
+  brandColor: DEFAULT_BRAND_COLOR,
   preferences: {
     showConduct: true,
     showAttention: true,
@@ -833,7 +840,7 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} doctorProfile={doctorProfile} consultationDate={selectedEvent?.date} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
       </main>
 
       {/* Profile Popup */}
@@ -870,11 +877,15 @@ export default function App() {
 function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
   const [name, setName] = useState(profile.name || '');
   const [specialty, setSpecialty] = useState(profile.specialty || '');
+  const [crn, setCrn] = useState(profile.crm || '');
   const [photo, setPhoto] = useState<string | null>(profile.photo);
+  const [logoUrl, setLogoUrl] = useState<string | null>(profile.logoUrl || null);
+  const [brandColor, setBrandColor] = useState<string>(profile.brandColor || '#2563EB');
   const defaultPrefs = { showConduct: true, showAttention: true, showExams: true, tone: 'humanizado' };
   const [prefs, setPrefs] = useState(profile.preferences || defaultPrefs);
-  const [tab, setTab] = useState<'profile' | 'preferences'>('profile');
+  const [tab, setTab] = useState<'profile' | 'preferences' | 'brand'>('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -891,12 +902,28 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
     }
   };
 
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 1 * 1024 * 1024) {
+        alert('Logo deve ter no máximo 1MB. Reduza o tamanho da imagem.');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => setLogoUrl(reader.result as string);
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = () => {
     onSave({
       ...profile,
       name: name.trim() || 'Nutricionista',
       specialty: specialty.trim() || 'Nutrição Clínica',
+      crm: crn.trim(),
       photo,
+      logoUrl,
+      brandColor,
       preferences: prefs,
     });
   };
@@ -916,10 +943,12 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
       >
         <div className="text-center mb-4">
           <h3 className="text-2xl font-black text-slate-900">
-            {tab === 'profile' ? 'Meu Perfil' : 'Preferências'}
+            {tab === 'profile' ? 'Meu Perfil' : tab === 'preferences' ? 'Preferências' : 'Identidade Visual'}
           </h3>
           <p className="text-slate-500 mt-1 text-sm">
-            {tab === 'profile' ? 'Configure sua foto e informações' : 'Como a análise aparece para você'}
+            {tab === 'profile' ? 'Configure sua foto e informações'
+              : tab === 'preferences' ? 'Como a análise aparece para você'
+              : 'Logo e cor que aparecem nos PDFs gerados'}
           </p>
         </div>
 
@@ -927,7 +956,7 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
         <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-5">
           <button
             onClick={() => setTab('profile')}
-            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
               tab === 'profile' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
@@ -935,15 +964,131 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
           </button>
           <button
             onClick={() => setTab('preferences')}
-            className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
               tab === 'preferences' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             Preferências
           </button>
+          <button
+            onClick={() => setTab('brand')}
+            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${
+              tab === 'brand' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Visual
+          </button>
         </div>
 
-        {tab === 'preferences' ? (
+        {tab === 'brand' ? (
+          <div className="space-y-5">
+            {/* Logo upload */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Logo (aparece no topo dos PDFs)
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                  ) : (
+                    <span className="text-[10px] text-slate-400 text-center px-2">Sem logo</span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => logoInputRef.current?.click()}
+                    className="px-3 py-2 text-xs font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                  >
+                    {logoUrl ? 'Trocar logo' : 'Enviar logo'}
+                  </button>
+                  {logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setLogoUrl(null)}
+                      className="px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      Remover
+                    </button>
+                  )}
+                  <input
+                    ref={logoInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/jpg,image/svg+xml"
+                    onChange={handleLogoChange}
+                    className="hidden"
+                  />
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-2">
+                Recomendado: PNG com fundo transparente, máx 1MB.
+              </p>
+            </div>
+
+            {/* Brand color */}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Cor primária (títulos e detalhes nos PDFs)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="color"
+                  value={brandColor}
+                  onChange={(e) => setBrandColor(e.target.value)}
+                  className="w-14 h-14 rounded-xl border border-slate-200 cursor-pointer bg-white"
+                />
+                <div className="flex-1">
+                  <input
+                    type="text"
+                    value={brandColor}
+                    onChange={(e) => setBrandColor(e.target.value)}
+                    placeholder="#2563EB"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none font-mono text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                  />
+                  <div className="flex gap-1.5 mt-2">
+                    {['#2563EB', '#10B981', '#7C3AED', '#DB2777', '#F59E0B', '#0F172A'].map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setBrandColor(c)}
+                        className={`w-6 h-6 rounded-full border-2 transition-transform ${brandColor === c ? 'border-slate-900 scale-110' : 'border-white hover:scale-105'}`}
+                        style={{ backgroundColor: c }}
+                        title={c}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Preview */}
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Pré-visualização do PDF</p>
+              <div className="bg-white rounded-lg shadow-sm p-4 border border-slate-100">
+                <div className="flex items-center gap-3 pb-3 border-b" style={{ borderColor: brandColor }}>
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="Logo" className="h-10 object-contain" />
+                  ) : (
+                    <div className="text-sm font-black" style={{ color: brandColor }}>
+                      {name || 'Nutricionista'}
+                    </div>
+                  )}
+                  <div className="ml-auto text-right">
+                    <div className="text-[10px] font-bold text-slate-700">{name || 'Nutricionista'}</div>
+                    <div className="text-[9px] text-slate-400">{specialty} {crn && `• CRN ${crn}`}</div>
+                  </div>
+                </div>
+                <div className="mt-3">
+                  <div className="text-xs font-black uppercase tracking-wider mb-1" style={{ color: brandColor }}>
+                    Pedido de Exames
+                  </div>
+                  <div className="text-[10px] text-slate-500">Exemplo de cabeçalho...</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : tab === 'preferences' ? (
           <div className="space-y-5">
             {/* Sections to show */}
             <div>
@@ -1049,7 +1194,7 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
         </div>
 
         {/* Specialty Input */}
-        <div className="mb-6">
+        <div className="mb-4">
           <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Especialidade</label>
           <input
             type="text"
@@ -1057,6 +1202,18 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 outline-none font-medium focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
             value={specialty}
             onChange={(e) => setSpecialty(e.target.value)}
+          />
+        </div>
+
+        {/* CRN Input */}
+        <div className="mb-6">
+          <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">CRN</label>
+          <input
+            type="text"
+            placeholder="Ex: 12345/SP"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 outline-none font-medium focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+            value={crn}
+            onChange={(e) => setCrn(e.target.value)}
           />
         </div>
 
@@ -1859,7 +2016,7 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate }: any) {
   const prefs = preferences || { showConduct: true, showAttention: true, showExams: true };
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
@@ -1867,6 +2024,28 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [editedConditions, setEditedConditions] = useState<string[]>([]);
   const [editedExams, setEditedExams] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'condition' | 'exam'; index: number } | null>(null);
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | null>(null);
+
+  const handleDownload = async (kind: 'exams' | 'conduct') => {
+    if (!result) return;
+    setDownloadOpen(false);
+    setGeneratingPdf(kind);
+    try {
+      const { generateExamRequestPdf, generateConductPdf } = await import('./utils/pdfGenerator');
+      const profile = doctorProfile || {};
+      if (kind === 'exams') {
+        await generateExamRequestPdf(result, patientName, consultationDate, profile);
+      } else {
+        await generateConductPdf(result, patientName, consultationDate, profile);
+      }
+    } catch (err) {
+      console.error('Failed to generate PDF:', err);
+      alert('Erro ao gerar PDF. Tente novamente.');
+    } finally {
+      setGeneratingPdf(null);
+    }
+  };
 
   if (!result) return null;
 
@@ -2012,10 +2191,53 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
 
   return (
     <div className="space-y-5 pb-20 animate-in fade-in zoom-in-95 duration-500">
-      {/* Back button */}
-      <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm hover:gap-3 transition-all">
-        <ArrowLeft size={16} /> Voltar
-      </button>
+      {/* Top bar: back + download */}
+      <div className="flex items-center justify-between gap-3">
+        <button onClick={onBack} className="flex items-center gap-2 text-blue-600 font-bold text-sm hover:gap-3 transition-all">
+          <ArrowLeft size={16} /> Voltar
+        </button>
+        {/* Download dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setDownloadOpen((v) => !v)}
+            disabled={!!generatingPdf}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm transition-colors disabled:opacity-60"
+          >
+            {generatingPdf ? (
+              <><Loader2 size={14} className="animate-spin" /> Gerando…</>
+            ) : (
+              <><FileText size={14} /> Baixar PDF</>
+            )}
+          </button>
+          {downloadOpen && !generatingPdf && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setDownloadOpen(false)} />
+              <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-slate-200 shadow-xl z-40 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <button
+                  onClick={() => handleDownload('exams')}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100"
+                >
+                  <TestTube size={16} className="text-rose-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Pedido de Exames</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Solicitação para o laboratório</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleDownload('conduct')}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <ClipboardCheck size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Conduta Nutricional</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Orientações para o paciente</div>
+                  </div>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Elegant header */}
       <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-8 shadow-sm">

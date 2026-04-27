@@ -9,6 +9,7 @@ import { PatientList, PatientPage } from './components/patient';
 import { ExamUploader } from './components/patient/ExamUploader';
 import { ConsultationBriefingBubble } from './components/patient/ConsultationBriefingBubble';
 import { MealPlanCard } from './components/patient/MealPlanCard';
+import { MealPlanBubble } from './components/patient/MealPlanBubble';
 
 // Firebase Imports
 import {
@@ -871,6 +872,17 @@ export default function App() {
             const pn = (patientName || '').trim().toLowerCase();
             return pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
           })()}
+          onUpdatePatient={(changes: any) => {
+            const pn = (patientName || '').trim().toLowerCase();
+            const target = pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
+            if (!target) return;
+            setPatients(prev => prev.map((p: any) =>
+              p.id === target.id ? { ...p, ...changes } : p
+            ));
+            if (selectedPatient?.id === target.id) {
+              setSelectedPatient(prev => prev ? { ...prev, ...changes } : null);
+            }
+          }}
           onSaveMealPlan={async (structuredPlan: any) => {
             const pn = (patientName || '').trim().toLowerCase();
             const target = pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
@@ -2100,53 +2112,6 @@ function TranscriptionView({
               />
             </div>
 
-            {/* Anthropometric data — used by AI to suggest meal plans (all optional) */}
-            <div className="mb-5 pt-4 border-t border-slate-100">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                Dados clínicos <span className="text-slate-300 font-normal normal-case">(opcional, melhora sugestões da IA)</span>
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    placeholder="Peso (kg)"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
-                    value={tempWeight}
-                    onChange={(e) => setTempWeight(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    placeholder="Altura (cm)"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
-                    value={tempHeight}
-                    onChange={(e) => setTempHeight(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <input
-                    type="date"
-                    placeholder="Nascimento"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
-                    value={tempBirthDate}
-                    onChange={(e) => setTempBirthDate(e.target.value)}
-                    title="Data de nascimento"
-                  />
-                </div>
-              </div>
-              <input
-                type="text"
-                placeholder="Restrições / preferências (ex: vegetariana, sem lactose, alergia a amendoim)"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all mt-2"
-                value={tempRestrictions}
-                onChange={(e) => setTempRestrictions(e.target.value)}
-              />
-            </div>
-
             {/* Action Buttons */}
             <div className="flex gap-3">
               <button
@@ -2170,7 +2135,7 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate, currentPatient, onSaveMealPlan }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate, currentPatient, onSaveMealPlan, onUpdatePatient }: any) {
   const prefs = preferences || { showConduct: true, showAttention: true, showExams: true };
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
@@ -2186,34 +2151,32 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [savingPlan, setSavingPlan] = useState(false);
   const [planGenError, setPlanGenError] = useState<string | null>(null);
 
-  const handleGeneratePlan = async () => {
-    if (!currentPatient) {
-      setPlanGenError('Paciente não identificado.');
-      return;
-    }
-    setPlanGenError(null);
-    setGeneratingPlan(true);
-    try {
-      const auth = (await import('firebase/auth')).getAuth();
-      const idToken = await auth.currentUser?.getIdToken();
-      if (!idToken) throw new Error('Sessão expirada. Faça login novamente.');
+  // Generate meal plan via API. Bubble manages its own loading/error state and
+  // passes freshly-edited anthropometry. Returns the plan (or null) — bubble
+  // shows error if it throws.
+  const handleGeneratePlan = async (anthropometry?: any): Promise<any> => {
+    if (!currentPatient) throw new Error('Paciente não identificado.');
 
-      // Build anthropometry context (age computed from birthDate if present)
+    const anthro: any = anthropometry || {};
+    if (!anthropometry) {
       const ageFromBirth = currentPatient.birthDate
         ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
         : null;
-      const anthro: any = {};
       if (currentPatient.weightKg) anthro.weightKg = currentPatient.weightKg;
       if (currentPatient.heightCm) anthro.heightCm = currentPatient.heightCm;
       if (ageFromBirth) anthro.age = ageFromBirth;
       if (currentPatient.dietaryRestrictions) anthro.dietaryRestrictions = currentPatient.dietaryRestrictions;
+    }
 
-      const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
-        ? 'https://echomed-p3tr.onrender.com'
-        : 'http://localhost:3001';
+    const auth = (await import('firebase/auth')).getAuth();
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Sessão expirada. Faça login novamente.');
 
-      // Use the existing analysis transcript and ask only for the meal plan
-      const transcript = `Reaproveitamento da consulta atual para gerar plano alimentar estruturado.
+    const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+      ? 'https://echomed-p3tr.onrender.com'
+      : 'http://localhost:3001';
+
+    const transcript = `Reaproveitamento da consulta atual para gerar plano alimentar estruturado.
 
 Análise prévia:
 - Avaliação: ${result.nutritionalAssessment || ''}
@@ -2222,37 +2185,30 @@ Análise prévia:
 - Objetivo: ${(currentPatient.goals || []).join(', ') || currentPatient.goal || 'não definido'}
 - Treino: ${(currentPatient.trainingRoutine || []).map((t: any) => `${t.type} ${t.frequency}`).join(', ') || 'não informado'}`;
 
-      const resp = await fetch(`${baseUrl}/api/analyze-medical`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          transcript,
-          tone: doctorProfile?.preferences?.tone || 'humanizado',
-          generateMealPlan: true,
-          patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
-        }),
-      });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        throw new Error(err.details || err.error || 'Erro ao gerar plano');
-      }
-      const data = await resp.json();
-      if (data.structuredMealPlan && Array.isArray(data.structuredMealPlan.meals)) {
-        setMealPlan(data.structuredMealPlan);
-        // Persist on the consultation event so it stays after navigating away
-        if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: data.structuredMealPlan });
-      } else {
-        setPlanGenError('A IA não retornou um plano estruturado. Tente novamente.');
-      }
-    } catch (err: any) {
-      console.error('Meal plan generation error:', err);
-      setPlanGenError(err.message || 'Erro ao gerar plano alimentar.');
-    } finally {
-      setGeneratingPlan(false);
+    const resp = await fetch(`${baseUrl}/api/analyze-medical`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        transcript,
+        tone: doctorProfile?.preferences?.tone || 'humanizado',
+        generateMealPlan: true,
+        patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
+      }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.details || err.error || 'Erro ao gerar plano');
     }
+    const data = await resp.json();
+    if (data.structuredMealPlan && Array.isArray(data.structuredMealPlan.meals)) {
+      setMealPlan(data.structuredMealPlan);
+      if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: data.structuredMealPlan });
+      return data.structuredMealPlan;
+    }
+    return null;
   };
 
   const handleSaveMealPlanAsActive = async () => {
@@ -2614,8 +2570,9 @@ Análise prévia:
         </div>
       )}
 
-      {/* Structured Meal Plan */}
-      {mealPlan ? (
+      {/* Structured Meal Plan — only renders when there's a plan to show.
+          Generation happens via the floating MealPlanBubble (see App-level render). */}
+      {mealPlan && (
         <MealPlanCard
           plan={mealPlan}
           onChange={(next: any) => {
@@ -2625,30 +2582,6 @@ Análise prévia:
           onSavePlan={onSaveMealPlan ? handleSaveMealPlanAsActive : undefined}
           saving={savingPlan}
         />
-      ) : (
-        <div className="bg-white rounded-2xl md:rounded-3xl border border-dashed border-blue-300 p-5 md:p-6 text-center">
-          <div className="flex flex-col items-center gap-2">
-            <Utensils size={20} className="text-blue-600" />
-            <p className="text-sm text-slate-700 font-bold">Plano alimentar estruturado</p>
-            <p className="text-xs text-slate-500 max-w-md">
-              Gere um plano-base com refeições, alimentos e substituições baseado nesta consulta. Você pode editar tudo antes de entregar à paciente.
-            </p>
-            <button
-              onClick={handleGeneratePlan}
-              disabled={generatingPlan}
-              className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors disabled:opacity-60"
-            >
-              {generatingPlan ? (
-                <><Loader2 size={14} className="animate-spin" /> Gerando plano…</>
-              ) : (
-                <><Utensils size={14} /> Sugerir plano alimentar</>
-              )}
-            </button>
-            {planGenError && (
-              <p className="text-xs text-red-600 mt-2">{planGenError}</p>
-            )}
-          </div>
-        </div>
       )}
 
       {/* Bottom grid: Exams + Attention */}
@@ -2802,6 +2735,16 @@ Análise prévia:
             </div>
           </div>
         </div>
+      )}
+
+      {/* Floating meal plan bubble (data + generate) */}
+      {currentPatient && (
+        <MealPlanBubble
+          patient={currentPatient}
+          initialPlan={mealPlan}
+          onUpdatePatient={onUpdatePatient || (() => {})}
+          onGeneratePlan={handleGeneratePlan}
+        />
       )}
     </div>
   );

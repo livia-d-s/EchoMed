@@ -16,6 +16,7 @@ interface AnalysisResult {
   patientFriendlyConduct?: string;
   medicalReferralSummary?: string;
   possibleAssociatedConditions?: string[];
+  structuredMealPlan?: any;
 }
 
 const DEFAULT_BRAND = '#2563EB';
@@ -407,5 +408,124 @@ export async function generateMedicalReferralPdf(
 
   const pdfMake = await loadPdfMake();
   const fileName = `Encaminhamento_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
+  downloadPdf(pdfMake, docDef, fileName);
+}
+
+export async function generateMealPlanPdf(
+  result: AnalysisResult,
+  patientName: string,
+  consultationDate: any,
+  profile: NutriProfile,
+): Promise<void> {
+  const brand = profile.brandColor || DEFAULT_BRAND;
+  const dateStr = formatDate(consultationDate) || formatDate(new Date());
+  const plan = result.structuredMealPlan;
+
+  if (!plan || !Array.isArray(plan.meals) || plan.meals.length === 0) {
+    alert('Nenhum plano alimentar disponível para esta consulta. Gere um primeiro.');
+    return;
+  }
+
+  // Build a meal table: meal name | items + substitutions
+  const mealRows = plan.meals.map((meal: any) => {
+    const itemsStack: any[] = [];
+    (meal.items || []).forEach((item: any, idx: number) => {
+      itemsStack.push({
+        text: `•  ${item.food}`,
+        style: 'mealItem',
+        margin: [0, idx === 0 ? 0 : 4, 0, 0],
+      });
+      if (Array.isArray(item.substitutions) && item.substitutions.length > 0) {
+        itemsStack.push({
+          text: `Substituições: ${item.substitutions.join(' / ')}`,
+          style: 'substitutions',
+          margin: [12, 1, 0, 0],
+        });
+      }
+    });
+    return [
+      {
+        stack: [
+          { text: meal.name, style: 'mealName' },
+          meal.time ? { text: meal.time, style: 'mealTime' } : { text: '', style: 'mealTime' },
+        ],
+        margin: [0, 6, 0, 6],
+      },
+      { stack: itemsStack, margin: [8, 6, 0, 6] },
+    ];
+  });
+
+  const macroBlock = plan.macroEstimate ? [
+    { text: 'METAS DIÁRIAS ESTIMADAS', style: 'sectionHeader', margin: [0, 12, 0, 6] },
+    {
+      columns: [
+        plan.macroEstimate.calories != null
+          ? { stack: [{ text: 'Calorias', style: 'macroLabel' }, { text: `${plan.macroEstimate.calories} kcal`, style: 'macroValue' }] }
+          : { text: '' },
+        plan.macroEstimate.protein
+          ? { stack: [{ text: 'Proteínas', style: 'macroLabel' }, { text: plan.macroEstimate.protein, style: 'macroValue' }] }
+          : { text: '' },
+        plan.macroEstimate.carbs
+          ? { stack: [{ text: 'Carbos', style: 'macroLabel' }, { text: plan.macroEstimate.carbs, style: 'macroValue' }] }
+          : { text: '' },
+        plan.macroEstimate.fat
+          ? { stack: [{ text: 'Gorduras', style: 'macroLabel' }, { text: plan.macroEstimate.fat, style: 'macroValue' }] }
+          : { text: '' },
+      ],
+      margin: [0, 0, 0, 8],
+    },
+  ] : [];
+
+  const docDef: any = {
+    pageSize: 'A4',
+    pageMargins: [40, 40, 40, 40],
+    content: [
+      ...buildHeader(profile, brand),
+      { text: 'PLANO ALIMENTAR', style: 'tinyLabel', color: brand },
+      { text: 'Sugestão Nutricional', style: 'documentTitle' },
+      buildPatientBlock(patientName || 'Paciente', dateStr, brand),
+
+      ...macroBlock,
+
+      { text: 'REFEIÇÕES', style: 'sectionHeader', margin: [0, 8, 0, 6] },
+      {
+        table: {
+          widths: [110, '*'],
+          body: mealRows,
+        },
+        layout: {
+          hLineWidth: () => 0.5,
+          vLineWidth: () => 0,
+          hLineColor: () => '#E2E8F0',
+          paddingLeft: () => 0,
+          paddingRight: () => 0,
+        },
+      },
+
+      ...(plan.notes ? [
+        { text: 'OBSERVAÇÕES', style: 'sectionHeader', margin: [0, 14, 0, 6] },
+        { text: plan.notes, style: 'body' },
+      ] : []),
+
+      {
+        text: 'Plano alimentar elaborado com apoio de inteligência artificial e revisado pela nutricionista.',
+        style: 'disclaimer',
+      },
+    ],
+    styles: {
+      ...commonStyles(brand),
+      mealName: { fontSize: 10, bold: true, color: brand, characterSpacing: 1.2 },
+      mealTime: { fontSize: 9, color: '#64748B' },
+      mealItem: { fontSize: 11, color: '#0F172A' },
+      substitutions: { fontSize: 9, color: '#64748B', italics: true },
+      macroLabel: { fontSize: 8, bold: true, color: '#94A3B8', characterSpacing: 1, alignment: 'center' },
+      macroValue: { fontSize: 13, bold: true, color: '#0F172A', alignment: 'center' },
+    },
+    footer: buildFooter(brand),
+    defaultStyle: { font: 'Roboto' },
+  };
+
+  const pdfMake = await loadPdfMake();
+  const fileName = `Plano_Alimentar_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
   downloadPdf(pdfMake, docDef, fileName);
 }

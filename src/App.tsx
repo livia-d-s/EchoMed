@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Mic, Square, Pause, Play, Activity, User, FileText,
   ArrowLeft, Camera, Check, AlertTriangle, Loader2, Users, Pencil, Info, CheckCircle, Trash2,
-  ClipboardCheck, TrendingUp, Brain, Stethoscope, TestTube
+  ClipboardCheck, TrendingUp, Brain, Stethoscope, TestTube, Utensils
 } from 'lucide-react';
 import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingActivity } from '../types';
 import { PatientList, PatientPage } from './components/patient';
 import { ExamUploader } from './components/patient/ExamUploader';
 import { ConsultationBriefingBubble } from './components/patient/ConsultationBriefingBubble';
+import { MealPlanCard } from './components/patient/MealPlanCard';
 
 // Firebase Imports
 import {
@@ -197,6 +198,11 @@ export default function App() {
   const [currentPatientGoalCustom, setCurrentPatientGoalCustom] = useState('');
   const [currentPatientTraining, setCurrentPatientTraining] = useState<TrainingActivity[]>([]);
   const [currentIsFirstConsultation, setCurrentIsFirstConsultation] = useState<boolean | null>(null);
+  // Anthropometric data captured at consultation start — applied to patient on finalize
+  const [currentPatientWeight, setCurrentPatientWeight] = useState<number | null>(null);
+  const [currentPatientHeight, setCurrentPatientHeight] = useState<number | null>(null);
+  const [currentPatientBirthDate, setCurrentPatientBirthDate] = useState<string>('');
+  const [currentPatientRestrictions, setCurrentPatientRestrictions] = useState<string>('');
 
   // Show toast notification
   const showToast = (message: string) => {
@@ -646,10 +652,20 @@ export default function App() {
         )
       );
 
-      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0 || newMealPlans.length > 0) {
+      // Anthropometric data captured this consultation — fill if patient doesn't have it yet
+      const anthropoChanges: any = {};
+      if (currentPatientWeight && !patient.weightKg) anthropoChanges.weightKg = currentPatientWeight;
+      if (currentPatientHeight && !patient.heightCm) anthropoChanges.heightCm = currentPatientHeight;
+      if (currentPatientBirthDate && !patient.birthDate) anthropoChanges.birthDate = currentPatientBirthDate;
+      if (currentPatientRestrictions && !patient.dietaryRestrictions) {
+        anthropoChanges.dietaryRestrictions = currentPatientRestrictions;
+      }
+      const hasAnthropoChanges = Object.keys(anthropoChanges).length > 0;
+
+      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0 || newMealPlans.length > 0 || hasAnthropoChanges) {
         setPatients(prev => prev.map(p => {
           if (p.id !== patient.id) return p;
-          const updated: any = { ...p };
+          const updated: any = { ...p, ...anthropoChanges };
           if (newHighlights.length > 0) {
             updated.highlights = [...existingHighlights, ...newHighlights];
           }
@@ -772,6 +788,10 @@ export default function App() {
               isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
               pendingExams={pendingExams} setPendingExams={setPendingExams}
               pendingMealPlans={pendingMealPlans} setPendingMealPlans={setPendingMealPlans}
+              patientWeight={currentPatientWeight} setPatientWeight={setCurrentPatientWeight}
+              patientHeight={currentPatientHeight} setPatientHeight={setCurrentPatientHeight}
+              patientBirthDate={currentPatientBirthDate} setPatientBirthDate={setCurrentPatientBirthDate}
+              patientRestrictions={currentPatientRestrictions} setPatientRestrictions={setCurrentPatientRestrictions}
             />
             <ConsultationBriefingBubble
               events={events}
@@ -840,7 +860,40 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} doctorProfile={doctorProfile} consultationDate={selectedEvent?.date} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView
+          result={currentResult}
+          patientName={patientName}
+          eventId={selectedEvent?.id}
+          preferences={doctorProfile.preferences}
+          doctorProfile={doctorProfile}
+          consultationDate={selectedEvent?.date}
+          currentPatient={(() => {
+            const pn = (patientName || '').trim().toLowerCase();
+            return pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
+          })()}
+          onSaveMealPlan={async (structuredPlan: any) => {
+            const pn = (patientName || '').trim().toLowerCase();
+            const target = pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
+            if (!target) return;
+            // Convert structured plan to a MealPlan entry (text representation)
+            const text = JSON.stringify(structuredPlan, null, 2);
+            const newPlan: any = {
+              id: `plan_ai_${Date.now()}`,
+              fileName: `Plano_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`,
+              uploadedAt: new Date().toISOString(),
+              extractedText: text,
+              sizeBytes: text.length,
+              structuredPlan,
+            };
+            setPatients(prev => prev.map((p: any) =>
+              p.id === target.id
+                ? { ...p, mealPlans: [...(p.mealPlans || []), newPlan] }
+                : p
+            ));
+          }}
+          onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }}
+          onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }}
+        />}
       </main>
 
       {/* Profile Popup */}
@@ -1272,7 +1325,11 @@ function TranscriptionView({
   patientGoals, setPatientGoals, patientGoalCustom, setPatientGoalCustom,
   patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation,
   pendingExams, setPendingExams,
-  pendingMealPlans, setPendingMealPlans
+  pendingMealPlans, setPendingMealPlans,
+  patientWeight, setPatientWeight,
+  patientHeight, setPatientHeight,
+  patientBirthDate, setPatientBirthDate,
+  patientRestrictions, setPatientRestrictions
 }: any) {
   const recognitionRef = useRef<any>(null);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
@@ -1283,6 +1340,10 @@ function TranscriptionView({
   const [tempGoals, setTempGoals] = useState<PatientGoal[]>([]);
   const [tempGoalCustom, setTempGoalCustom] = useState('');
   const [tempTraining, setTempTraining] = useState('');
+  const [tempWeight, setTempWeight] = useState<string>('');
+  const [tempHeight, setTempHeight] = useState<string>('');
+  const [tempBirthDate, setTempBirthDate] = useState<string>('');
+  const [tempRestrictions, setTempRestrictions] = useState<string>('');
   const [tempIsFirst, setTempIsFirst] = useState<boolean | null>(null);
   const [inlineTrainingText, setInlineTrainingText] = useState('');
 
@@ -1442,6 +1503,10 @@ function TranscriptionView({
       setTempGoalCustom('');
       setTempTraining('');
       setTempIsFirst(null);
+      setTempWeight('');
+      setTempHeight('');
+      setTempBirthDate('');
+      setTempRestrictions('');
       setPendingExams([]);
       setPendingMealPlans([]);
       setShowNamePopup(true);
@@ -1461,6 +1526,14 @@ function TranscriptionView({
     if (tempGoalCustom) setPatientGoalCustom(tempGoalCustom);
     if (tempTraining.trim()) setPatientTraining(parseTraining(tempTraining));
     if (tempIsFirst !== null) setIsFirstConsultation(tempIsFirst);
+
+    // Anthropometric data (only set if filled)
+    const w = parseFloat((tempWeight || '').replace(',', '.'));
+    if (!isNaN(w) && w > 0) setPatientWeight(w);
+    const h = parseFloat((tempHeight || '').replace(',', '.'));
+    if (!isNaN(h) && h > 0) setPatientHeight(h);
+    if (tempBirthDate) setPatientBirthDate(tempBirthDate);
+    if (tempRestrictions.trim()) setPatientRestrictions(tempRestrictions.trim());
 
     setShowNamePopup(false);
     if (pendingAction === 'record') {
@@ -1892,6 +1965,11 @@ function TranscriptionView({
                           // Pre-load existing exams + meal plans so nutri sees them
                           if (p.exams?.length) setPendingExams(p.exams);
                           if (p.mealPlans?.length) setPendingMealPlans(p.mealPlans);
+                          // Pre-load anthropometric data
+                          if (p.weightKg) setTempWeight(String(p.weightKg));
+                          if (p.heightCm) setTempHeight(String(p.heightCm));
+                          if (p.birthDate) setTempBirthDate(p.birthDate);
+                          if (p.dietaryRestrictions) setTempRestrictions(p.dietaryRestrictions);
                           setShowPopupSuggestions(false);
                         }}
                       >
@@ -1981,7 +2059,7 @@ function TranscriptionView({
             </div>
 
             {/* Meal plan upload (optional, useful for migration from other apps) */}
-            <div className="mb-5">
+            <div className="mb-4">
               <ExamUploader
                 exams={pendingMealPlans}
                 onChange={setPendingMealPlans}
@@ -1990,6 +2068,53 @@ function TranscriptionView({
                 emptyMessage="Nenhum plano. Anexe o plano atual da paciente (importar de outro app ou plano vigente)."
                 idPrefix="plan"
                 buttonColor="emerald"
+              />
+            </div>
+
+            {/* Anthropometric data — used by AI to suggest meal plans (all optional) */}
+            <div className="mb-5 pt-4 border-t border-slate-100">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Dados clínicos <span className="text-slate-300 font-normal normal-case">(opcional, melhora sugestões da IA)</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    placeholder="Peso (kg)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                    value={tempWeight}
+                    onChange={(e) => setTempWeight(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Altura (cm)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                    value={tempHeight}
+                    onChange={(e) => setTempHeight(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="date"
+                    placeholder="Nascimento"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                    value={tempBirthDate}
+                    onChange={(e) => setTempBirthDate(e.target.value)}
+                    title="Data de nascimento"
+                  />
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Restrições / preferências (ex: vegetariana, sem lactose, alergia a amendoim)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all mt-2"
+                value={tempRestrictions}
+                onChange={(e) => setTempRestrictions(e.target.value)}
               />
             </div>
 
@@ -2016,7 +2141,7 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate, currentPatient, onSaveMealPlan }: any) {
   const prefs = preferences || { showConduct: true, showAttention: true, showExams: true };
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
@@ -2025,21 +2150,114 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [editedExams, setEditedExams] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'condition' | 'exam'; index: number } | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | 'referral' | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | 'referral' | 'plan' | null>(null);
+  // Editable structured meal plan (initialized from result if present)
+  const [mealPlan, setMealPlan] = useState<any>(result?.structuredMealPlan || null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [planGenError, setPlanGenError] = useState<string | null>(null);
 
-  const handleDownload = async (kind: 'exams' | 'conduct' | 'referral') => {
+  const handleGeneratePlan = async () => {
+    if (!currentPatient) {
+      setPlanGenError('Paciente não identificado.');
+      return;
+    }
+    setPlanGenError(null);
+    setGeneratingPlan(true);
+    try {
+      const auth = (await import('firebase/auth')).getAuth();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Sessão expirada. Faça login novamente.');
+
+      // Build anthropometry context (age computed from birthDate if present)
+      const ageFromBirth = currentPatient.birthDate
+        ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
+        : null;
+      const anthro: any = {};
+      if (currentPatient.weightKg) anthro.weightKg = currentPatient.weightKg;
+      if (currentPatient.heightCm) anthro.heightCm = currentPatient.heightCm;
+      if (ageFromBirth) anthro.age = ageFromBirth;
+      if (currentPatient.dietaryRestrictions) anthro.dietaryRestrictions = currentPatient.dietaryRestrictions;
+
+      const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+        ? 'https://echomed-p3tr.onrender.com'
+        : 'http://localhost:3001';
+
+      // Use the existing analysis transcript and ask only for the meal plan
+      const transcript = `Reaproveitamento da consulta atual para gerar plano alimentar estruturado.
+
+Análise prévia:
+- Avaliação: ${result.nutritionalAssessment || ''}
+- Racional: ${result.clinicalRationale || ''}
+- Conduta atual: ${result.nutritionalConduct || ''}
+- Objetivo: ${(currentPatient.goals || []).join(', ') || currentPatient.goal || 'não definido'}
+- Treino: ${(currentPatient.trainingRoutine || []).map((t: any) => `${t.type} ${t.frequency}`).join(', ') || 'não informado'}`;
+
+      const resp = await fetch(`${baseUrl}/api/analyze-medical`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          transcript,
+          tone: doctorProfile?.preferences?.tone || 'humanizado',
+          generateMealPlan: true,
+          patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.details || err.error || 'Erro ao gerar plano');
+      }
+      const data = await resp.json();
+      if (data.structuredMealPlan && Array.isArray(data.structuredMealPlan.meals)) {
+        setMealPlan(data.structuredMealPlan);
+        // Persist on the consultation event so it stays after navigating away
+        if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: data.structuredMealPlan });
+      } else {
+        setPlanGenError('A IA não retornou um plano estruturado. Tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('Meal plan generation error:', err);
+      setPlanGenError(err.message || 'Erro ao gerar plano alimentar.');
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  const handleSaveMealPlanAsActive = async () => {
+    if (!mealPlan || !onSaveMealPlan) return;
+    setSavingPlan(true);
+    try {
+      await onSaveMealPlan(mealPlan);
+    } finally {
+      setSavingPlan(false);
+    }
+  };
+
+  const handleDownload = async (kind: 'exams' | 'conduct' | 'referral' | 'plan') => {
     if (!result) return;
     setDownloadOpen(false);
     setGeneratingPdf(kind);
     try {
-      const { generateExamRequestPdf, generateConductPdf, generateMedicalReferralPdf } = await import('./utils/pdfGenerator');
+      const {
+        generateExamRequestPdf,
+        generateConductPdf,
+        generateMedicalReferralPdf,
+        generateMealPlanPdf,
+      } = await import('./utils/pdfGenerator');
       const profile = doctorProfile || {};
+      // Always pass the latest mealPlan state into the result for the plan PDF
+      const resultForPdf = { ...result, structuredMealPlan: mealPlan || result.structuredMealPlan };
       if (kind === 'exams') {
-        await generateExamRequestPdf(result, patientName, consultationDate, profile);
+        await generateExamRequestPdf(resultForPdf, patientName, consultationDate, profile);
       } else if (kind === 'conduct') {
-        await generateConductPdf(result, patientName, consultationDate, profile);
+        await generateConductPdf(resultForPdf, patientName, consultationDate, profile);
+      } else if (kind === 'referral') {
+        await generateMedicalReferralPdf(resultForPdf, patientName, consultationDate, profile);
       } else {
-        await generateMedicalReferralPdf(result, patientName, consultationDate, profile);
+        await generateMealPlanPdf(resultForPdf, patientName, consultationDate, profile);
       }
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -2237,12 +2455,28 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
                 </button>
                 <button
                   onClick={() => handleDownload('referral')}
-                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100"
                 >
                   <Stethoscope size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="font-bold text-sm text-slate-800">Encaminhamento Médico</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">Resumo clínico para o médico</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleDownload('plan')}
+                  disabled={!mealPlan && !result?.structuredMealPlan}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!mealPlan && !result?.structuredMealPlan ? 'Gere um plano alimentar primeiro' : ''}
+                >
+                  <Utensils size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Plano Alimentar</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {mealPlan || result?.structuredMealPlan
+                        ? 'Refeições com substituições'
+                        : 'Gere um plano primeiro'}
+                    </div>
                   </div>
                 </button>
               </div>
@@ -2348,6 +2582,43 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Structured Meal Plan */}
+      {mealPlan ? (
+        <MealPlanCard
+          plan={mealPlan}
+          onChange={(next: any) => {
+            setMealPlan(next);
+            if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: next });
+          }}
+          onSavePlan={onSaveMealPlan ? handleSaveMealPlanAsActive : undefined}
+          saving={savingPlan}
+        />
+      ) : (
+        <div className="bg-white rounded-2xl md:rounded-3xl border border-dashed border-blue-300 p-5 md:p-6 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <Utensils size={20} className="text-blue-600" />
+            <p className="text-sm text-slate-700 font-bold">Plano alimentar estruturado</p>
+            <p className="text-xs text-slate-500 max-w-md">
+              Gere um plano-base com refeições, alimentos e substituições baseado nesta consulta. Você pode editar tudo antes de entregar à paciente.
+            </p>
+            <button
+              onClick={handleGeneratePlan}
+              disabled={generatingPlan}
+              className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors disabled:opacity-60"
+            >
+              {generatingPlan ? (
+                <><Loader2 size={14} className="animate-spin" /> Gerando plano…</>
+              ) : (
+                <><Utensils size={14} /> Sugerir plano alimentar</>
+              )}
+            </button>
+            {planGenError && (
+              <p className="text-xs text-red-600 mt-2">{planGenError}</p>
+            )}
+          </div>
         </div>
       )}
 

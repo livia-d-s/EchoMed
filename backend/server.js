@@ -85,7 +85,7 @@ e elaborações emocionais. Vá direto à conduta e às recomendações prática
 
 app.post('/api/analyze-medical', apiLimiter, requireAuth, async (req, res) => {
   try {
-    const { transcript, tone, exams, activeMealPlan } = req.body;
+    const { transcript, tone, exams, activeMealPlan, patientAnthropometry, generateMealPlan } = req.body;
     const selectedTone = tone && TONE_INSTRUCTIONS[tone] ? tone : 'humanizado';
     const toneInstruction = TONE_INSTRUCTIONS[selectedTone];
 
@@ -133,6 +133,67 @@ OBRIGATÓRIO: A paciente já segue o plano alimentar abaixo. No campo "nutrition
 --- ${label}${dateStr ? ` (anexado em ${dateStr})` : ''} ---
 ${planText}`;
     }
+
+    // Anthropometry context (optional)
+    let anthropoContext = '';
+    if (patientAnthropometry && typeof patientAnthropometry === 'object') {
+      const parts = [];
+      if (patientAnthropometry.weightKg) parts.push(`Peso: ${patientAnthropometry.weightKg} kg`);
+      if (patientAnthropometry.heightCm) parts.push(`Altura: ${patientAnthropometry.heightCm} cm`);
+      if (patientAnthropometry.age) parts.push(`Idade: ${patientAnthropometry.age} anos`);
+      if (patientAnthropometry.dietaryRestrictions) {
+        parts.push(`Restrições/preferências: ${patientAnthropometry.dietaryRestrictions}`);
+      }
+      if (parts.length > 0) {
+        anthropoContext = `\n\n[DADOS ANTROPOMÉTRICOS DA PACIENTE]\n${parts.join('\n')}`;
+      }
+    }
+
+    // Meal plan generation flag — only adds the structuredMealPlan field when nutri requests it
+    const mealPlanInstruction = generateMealPlan ? `
+
+[GERAÇÃO DE PLANO ALIMENTAR ESTRUTURADO]
+A nutricionista solicitou geração de um plano alimentar estruturado. Inclua o campo "structuredMealPlan" no JSON de resposta com a estrutura abaixo:
+
+{
+  "meals": [
+    {
+      "name": "Café da manhã",
+      "time": "07:00",
+      "items": [
+        {
+          "food": "1 fatia de pão integral",
+          "category": "carbo",
+          "substitutions": ["1 tapioca pequena", "2 colheres de aveia em flocos", "1/2 batata-doce cozida (100g)"]
+        },
+        {
+          "food": "1 ovo mexido",
+          "category": "proteina",
+          "substitutions": ["50g de frango desfiado", "2 colheres de chia", "1/2 xícara de iogurte natural"]
+        }
+      ]
+    }
+  ],
+  "notes": "Beber 2L de água ao dia. Evitar ultraprocessados.",
+  "macroEstimate": { "calories": 1800, "protein": "90g", "carbs": "220g", "fat": "60g" }
+}
+
+Regras OBRIGATÓRIAS para structuredMealPlan:
+- 5 refeições no padrão brasileiro: Café da manhã, Lanche da manhã, Almoço, Lanche da tarde, Jantar (pode ajustar para 4 ou 6 conforme contexto/treino)
+- Cada refeição com 2-4 alimentos
+- Cada alimento em "food" deve ter QUANTIDADE EM MEDIDA CASEIRA (ex: "1 fatia", "1 colher de sopa", "100g", "1 unidade média")
+- "category" obrigatório, valores: "carbo", "proteina", "gordura", "fruta", "vegetal", "lacteo", "outro"
+- "substitutions" com 3-4 alternativas EQUIVALENTES em quantidade/calorias da MESMA categoria
+  * Exemplo: se food é "1 banana média", substituições podem ser ["1 maçã grande", "1 fatia média de mamão", "8 morangos"] (todas frutas com porção similar)
+  * NÃO sugira substituição de categoria diferente (ex: trocar carbo por proteína)
+- Use alimentos COMUNS NO BRASIL: feijão, arroz, mandioca, cuscuz, tapioca, abacate, maracujá, aipim, etc.
+- Considere obrigatoriamente as RESTRIÇÕES da paciente (vegetariana → não inclua carnes; sem lactose → não inclua leite/queijo)
+- Considere o objetivo, treino e queixas relatadas
+- Se houver dados antropométricos (peso, altura, idade), preencha "macroEstimate" com calorias e macros estimados; se não houver, OMITA o campo macroEstimate (não retorne null, simplesmente não inclua)
+- "notes" é opcional, use para hidratação, suplementos, recomendações gerais
+- Se a paciente tem PLANO ATIVO anexado, NÃO gere um plano novo — retorne null no campo structuredMealPlan e use o nutritionalConduct para sugerir ajustes ao plano existente
+
+Quando NÃO solicitado, simplesmente NÃO inclua o campo structuredMealPlan no JSON.` : '';
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
@@ -250,7 +311,7 @@ mencione a necessidade de investigação adicional dentro do campo apropriado,
 sem inventar dados.
 `;
 
-    const prompt = `${systemPrompt}\n\nTranscrição da consulta:\n${transcript}${examsContext}${mealPlanContext}`;
+    const prompt = `${systemPrompt}${mealPlanInstruction}\n\nTranscrição da consulta:\n${transcript}${anthropoContext}${examsContext}${mealPlanContext}`;
 
     // Use Google AI Studio API - Gemini 2.0 Flash
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {

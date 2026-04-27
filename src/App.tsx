@@ -2240,29 +2240,28 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
       </div>
 
       {/* Elegant header */}
-      <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-8 shadow-sm">
-        <div className="flex items-center gap-2 text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em] mb-3">
-          <User size={12} /> <span>{patientName}</span>
-        </div>
-        <h2 className="text-xl sm:text-2xl md:text-[1.75rem] font-black tracking-tight leading-[1.3] text-slate-900 mb-4 line-clamp-6">
-          {title}
-        </h2>
-        {(adherence || behavior) && (
-          <div className="flex flex-wrap gap-2">
-            {adherence && (
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${adherenceStyle}`}>
-                <TrendingUp size={11} />
-                Adesão provável: <span className="capitalize">{adherence}</span>
-              </span>
-            )}
-            {behavior && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border bg-slate-50 text-slate-700 border-slate-200">
-                <Brain size={11} />
-                Perfil: <span className="capitalize">{behavior}</span>
-              </span>
-            )}
+      <div className="bg-white rounded-2xl md:rounded-3xl border border-slate-200 p-5 md:p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-slate-700 font-black uppercase text-sm tracking-[0.15em]">
+            <User size={14} className="text-slate-400" /> <span>{patientName}</span>
           </div>
-        )}
+          {(adherence || behavior) && (
+            <div className="flex flex-wrap gap-2">
+              {adherence && (
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${adherenceStyle}`}>
+                  <TrendingUp size={11} />
+                  Adesão provável: <span className="capitalize">{adherence}</span>
+                </span>
+              )}
+              {behavior && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border bg-slate-50 text-slate-700 border-slate-200">
+                  <Brain size={11} />
+                  Perfil: <span className="capitalize">{behavior}</span>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Racional Clínico */}

@@ -69,29 +69,13 @@ async function loadPdfMake(): Promise<any> {
   return pdfMake;
 }
 
-// Trigger download via blob + temporary anchor.
-// Using pdfMake.createPdf().download() can fail silently on the second call
-// in some browsers; manual blob download is more reliable.
-async function downloadPdf(pdfMake: any, docDef: any, fileName: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    try {
-      pdfMake.createPdf(docDef).getBlob((blob: Blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          resolve();
-        }, 100);
-      });
-    } catch (err) {
-      reject(err);
-    }
-  });
+// Use pdfmake's native download. Make filename unique to avoid edge cases
+// where the browser might dedupe/block a second download with the same name.
+function downloadPdf(pdfMake: any, docDef: any, fileName: string): void {
+  // Add a short timestamp suffix to make every download unique
+  const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+  const finalName = fileName.replace(/\.pdf$/, `_${ts}.pdf`);
+  pdfMake.createPdf(docDef).download(finalName);
 }
 
 function buildHeader(profile: NutriProfile, brand: string): any[] {
@@ -278,7 +262,7 @@ export async function generateExamRequestPdf(
 
   const pdfMake = await loadPdfMake();
   const fileName = `Pedido_Exames_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-  await downloadPdf(pdfMake, docDef, fileName);
+  downloadPdf(pdfMake, docDef, fileName);
 }
 
 export async function generateConductPdf(
@@ -339,5 +323,5 @@ export async function generateConductPdf(
 
   const pdfMake = await loadPdfMake();
   const fileName = `Conduta_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-  await downloadPdf(pdfMake, docDef, fileName);
+  downloadPdf(pdfMake, docDef, fileName);
 }

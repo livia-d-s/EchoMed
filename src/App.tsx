@@ -957,15 +957,44 @@ function ProfilePopup({ profile, userEmail, onSave, onClose, onLogout }: any) {
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 1 * 1024 * 1024) {
-        alert('Logo deve ter no máximo 1MB. Reduza o tamanho da imagem.');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => setLogoUrl(reader.result as string);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Imagem original muito grande (máx 5MB). Comprima antes de enviar.');
+      return;
     }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      // Resize to max 600x300px and re-encode as JPEG (q=0.85) so the base64
+      // stays well under Firestore's 1MB-per-field limit.
+      const img = new Image();
+      img.onload = () => {
+        const maxW = 600;
+        const maxH = 300;
+        let { width, height } = img;
+        if (width > maxW) { height = height * (maxW / width); width = maxW; }
+        if (height > maxH) { width = width * (maxH / height); height = maxH; }
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(width);
+        canvas.height = Math.round(height);
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { setLogoUrl(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        // PNG keeps transparency (logos), JPEG smaller for photos.
+        const isPng = file.type.includes('png');
+        let compressed = isPng
+          ? canvas.toDataURL('image/png')
+          : canvas.toDataURL('image/jpeg', 0.85);
+        // Last-resort safety net to stay under the 1MB Firestore field limit
+        if (compressed.length > 700_000) {
+          compressed = canvas.toDataURL('image/jpeg', 0.6);
+        }
+        setLogoUrl(compressed);
+      };
+      img.onerror = () => setLogoUrl(dataUrl);
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSave = () => {

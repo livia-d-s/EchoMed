@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Plus, Sliders, Pencil, Check, X, Target, Dumbbell, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Sliders, Pencil, Check, X, Target, Dumbbell, Sparkles, Activity } from 'lucide-react';
 import { Patient, GOAL_LABELS } from '../../../types';
+import { ClinicalDataModal } from './ClinicalDataModal';
 
 interface PatientHeaderProps {
   patient: Patient;
@@ -9,6 +10,7 @@ interface PatientHeaderProps {
   onNewAdjustment: () => void;
   onEditPatient?: (patientId: string, newName: string) => void;
   onUpdateHighlights?: (patientId: string, highlights: string[]) => void;
+  onUpdatePatient?: (changes: Partial<Patient>) => void;
 }
 
 export function PatientHeader({
@@ -17,8 +19,10 @@ export function PatientHeader({
   onNewConsultation,
   onNewAdjustment,
   onEditPatient,
-  onUpdateHighlights
+  onUpdateHighlights,
+  onUpdatePatient
 }: PatientHeaderProps) {
+  const [showClinicalModal, setShowClinicalModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(patient.name);
   const [isAddingHighlight, setIsAddingHighlight] = useState(false);
@@ -198,7 +202,7 @@ export function PatientHeader({
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 sm:gap-3 flex-shrink-0">
+          <div className="flex gap-2 sm:gap-3 flex-shrink-0 flex-wrap">
             <button
               onClick={onNewConsultation}
               className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white
@@ -219,6 +223,22 @@ export function PatientHeader({
               <span className="hidden sm:inline">Observação</span>
               <span className="sm:hidden">Obs.</span>
             </button>
+            {onUpdatePatient && (
+              <button
+                onClick={() => setShowClinicalModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-emerald-200
+                           text-emerald-700 rounded-xl font-bold text-sm hover:bg-emerald-50
+                           transition-colors relative"
+                title="Peso, altura, data de nascimento e restrições alimentares"
+              >
+                <Activity size={16} />
+                <span className="hidden sm:inline">Dados clínicos</span>
+                <span className="sm:hidden">Dados</span>
+                {(patient.weightKg || patient.heightCm || patient.birthDate) && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
+                )}
+              </button>
+            )}
           </div>
         </div>
 
@@ -320,6 +340,14 @@ export function PatientHeader({
           </div>
         )}
       </div>
+
+      {showClinicalModal && onUpdatePatient && (
+        <ClinicalDataModal
+          patient={patient}
+          onSave={(changes) => onUpdatePatient(changes)}
+          onClose={() => setShowClinicalModal(false)}
+        />
+      )}
     </div>
   );
 }

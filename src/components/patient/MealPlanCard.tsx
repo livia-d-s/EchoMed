@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Utensils, Plus, X, Pencil, Check, Repeat, Save, Loader2, Clock } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Utensils, Plus, X, Pencil, Check, Repeat, Save, Loader2, Clock, RefreshCw, AlertCircle } from 'lucide-react';
 import { StructuredMealPlan, StructuredMeal, StructuredMealItem } from '../../../types';
 
 interface MealPlanCardProps {
@@ -7,9 +7,41 @@ interface MealPlanCardProps {
   onChange: (next: StructuredMealPlan) => void;
   onSavePlan?: () => void;     // "Salvar como plano ativo"
   saving?: boolean;
+  onRecalculateMacros?: () => Promise<void>;
 }
 
-export function MealPlanCard({ plan, onChange, onSavePlan, saving }: MealPlanCardProps) {
+// Compact signature of the meals array — used to detect when macros are stale.
+function mealsSignature(plan: StructuredMealPlan): string {
+  return plan.meals
+    .map((m) => `${m.name}|${(m.items || []).map((it) => it.food).join('//')}`)
+    .join('::');
+}
+
+export function MealPlanCard({ plan, onChange, onSavePlan, saving, onRecalculateMacros }: MealPlanCardProps) {
+  const [recalculating, setRecalculating] = useState(false);
+  const baselineRef = useRef<string>(mealsSignature(plan));
+
+  // Reset baseline whenever macros are refreshed (parent updates plan.macroEstimate after recalc/generate).
+  // We track this by snapshotting the meals signature each time macroEstimate identity changes.
+  const macroId = useMemo(() => JSON.stringify(plan.macroEstimate || null), [plan.macroEstimate]);
+  useEffect(() => {
+    baselineRef.current = mealsSignature(plan);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [macroId]);
+
+  const currentSig = mealsSignature(plan);
+  const macrosStale = !!plan.macroEstimate && currentSig !== baselineRef.current;
+
+  const handleRecalc = async () => {
+    if (!onRecalculateMacros) return;
+    setRecalculating(true);
+    try {
+      await onRecalculateMacros();
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
   const update = (next: StructuredMealPlan) => onChange(next);
 
   const updateMeal = (mealIdx: number, meal: StructuredMeal) => {
@@ -61,18 +93,40 @@ export function MealPlanCard({ plan, onChange, onSavePlan, saving }: MealPlanCar
 
       {/* Macros */}
       {plan.macroEstimate && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5 bg-white rounded-xl border border-slate-100 p-3">
-          {plan.macroEstimate.calories != null && (
-            <MacroCell label="Calorias" value={`${plan.macroEstimate.calories} kcal`} />
-          )}
-          {plan.macroEstimate.protein && (
-            <MacroCell label="Proteínas" value={plan.macroEstimate.protein} />
-          )}
-          {plan.macroEstimate.carbs && (
-            <MacroCell label="Carbos" value={plan.macroEstimate.carbs} />
-          )}
-          {plan.macroEstimate.fat && (
-            <MacroCell label="Gorduras" value={plan.macroEstimate.fat} />
+        <div className={`relative mb-5 bg-white rounded-xl border p-3 transition-colors ${
+          macrosStale ? 'border-amber-200 bg-amber-50/40' : 'border-slate-100'
+        }`}>
+          <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 ${macrosStale ? 'opacity-60' : ''}`}>
+            {plan.macroEstimate.calories != null && (
+              <MacroCell label="Calorias" value={`${plan.macroEstimate.calories} kcal`} />
+            )}
+            {plan.macroEstimate.protein && (
+              <MacroCell label="Proteínas" value={plan.macroEstimate.protein} />
+            )}
+            {plan.macroEstimate.carbs && (
+              <MacroCell label="Carbos" value={plan.macroEstimate.carbs} />
+            )}
+            {plan.macroEstimate.fat && (
+              <MacroCell label="Gorduras" value={plan.macroEstimate.fat} />
+            )}
+          </div>
+          {macrosStale && onRecalculateMacros && (
+            <div className="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-700 font-bold">
+                <AlertCircle size={12} /> Macros desatualizados — você editou itens do plano
+              </div>
+              <button
+                onClick={handleRecalc}
+                disabled={recalculating}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-60"
+              >
+                {recalculating ? (
+                  <><Loader2 size={11} className="animate-spin" /> Recalculando…</>
+                ) : (
+                  <><RefreshCw size={11} /> Recalcular macros</>
+                )}
+              </button>
+            </div>
           )}
         </div>
       )}

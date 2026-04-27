@@ -371,6 +371,69 @@ sem inventar dados.
   }
 });
 
+// Recalculate macros for a structured meal plan after the nutri edited items/quantities
+app.post('/api/recalculate-macros', apiLimiter, requireAuth, async (req, res) => {
+  try {
+    const { mealPlan, patientAnthropometry } = req.body;
+    if (!mealPlan || !Array.isArray(mealPlan.meals) || mealPlan.meals.length === 0) {
+      return res.status(400).json({ error: 'mealPlan inválido ou vazio' });
+    }
+
+    const anthropoLines = [];
+    if (patientAnthropometry && typeof patientAnthropometry === 'object') {
+      if (patientAnthropometry.weightKg) anthropoLines.push(`Peso: ${patientAnthropometry.weightKg} kg`);
+      if (patientAnthropometry.heightCm) anthropoLines.push(`Altura: ${patientAnthropometry.heightCm} cm`);
+      if (patientAnthropometry.age) anthropoLines.push(`Idade: ${patientAnthropometry.age} anos`);
+    }
+
+    const planText = mealPlan.meals.map((m) => {
+      const items = (m.items || []).map((it) => `  - ${it.food}`).join('\n');
+      return `${m.name || 'Refeição'}${m.time ? ` (${m.time})` : ''}:\n${items}`;
+    }).join('\n\n');
+
+    const prompt = `Você é nutricionista clínica. Calcule as estimativas de macronutrientes do plano alimentar abaixo, considerando as quantidades em medidas caseiras informadas. Use referências nutricionais brasileiras (TBCA/TACO).
+
+${anthropoLines.length ? `[DADOS DA PACIENTE]\n${anthropoLines.join('\n')}\n\n` : ''}[PLANO ALIMENTAR]
+${planText}
+
+Responda APENAS com um JSON neste formato (sem texto extra, sem markdown):
+{
+  "calories": 1800,
+  "protein": "90g",
+  "carbs": "220g",
+  "fat": "60g"
+}
+
+Regras:
+- "calories" é número inteiro (kcal totais do dia)
+- "protein", "carbs", "fat" são strings com unidade em gramas (ex: "90g")
+- Some todos os itens de todas as refeições do dia
+- Se a quantidade de um item for absurda (ex: "30 colheres de tapioca"), reflita isso nos macros — NÃO normalize`;
+
+    const result = await genAI.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    });
+
+    const text = result.text || result.response?.text() || '';
+    const clean = String(text).replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+
+    res.json({
+      macroEstimate: {
+        calories: typeof parsed.calories === 'number' ? parsed.calories : Number(parsed.calories) || undefined,
+        protein: parsed.protein || undefined,
+        carbs: parsed.carbs || undefined,
+        fat: parsed.fat || undefined,
+      },
+    });
+  } catch (error) {
+    console.error('Erro ao recalcular macros:', error);
+    res.status(500).json({ error: 'Erro ao recalcular macros' });
+  }
+});
+
 // Endpoint legado para nutrição
 app.post('/api/analyze', apiLimiter, requireAuth, async (req, res) => {
   try {

@@ -851,6 +851,14 @@ export default function App() {
                 setSelectedPatient(prev => prev ? { ...prev, mealPlans } : null);
               }
             }}
+            onUpdatePatient={(patientId: string, changes: any) => {
+              setPatients(prev => prev.map(p =>
+                p.id === patientId ? { ...p, ...changes } : p
+              ));
+              if (selectedPatient?.id === patientId) {
+                setSelectedPatient(prev => prev ? { ...prev, ...changes } : null);
+              }
+            }}
             onEventClick={(event) => {
               setSelectedEvent(event);
               if (event.result) {
@@ -2221,6 +2229,44 @@ Análise prévia:
     }
   };
 
+  const handleRecalculateMacros = async () => {
+    if (!mealPlan || !currentPatient) return;
+    const anthro: any = {};
+    const ageFromBirth = currentPatient.birthDate
+      ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
+      : null;
+    if (currentPatient.weightKg) anthro.weightKg = currentPatient.weightKg;
+    if (currentPatient.heightCm) anthro.heightCm = currentPatient.heightCm;
+    if (ageFromBirth) anthro.age = ageFromBirth;
+
+    const auth = (await import('firebase/auth')).getAuth();
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Sessão expirada. Faça login novamente.');
+
+    const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+      ? 'https://echomed-p3tr.onrender.com'
+      : 'http://localhost:3001';
+
+    const resp = await fetch(`${baseUrl}/api/recalculate-macros`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        mealPlan,
+        patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
+      }),
+    });
+    if (!resp.ok) throw new Error('Erro ao recalcular macros');
+    const data = await resp.json();
+    if (data.macroEstimate) {
+      const updated = { ...mealPlan, macroEstimate: data.macroEstimate };
+      setMealPlan(updated);
+      if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: updated });
+    }
+  };
+
   const handleDownload = async (kind: 'exams' | 'conduct' | 'referral' | 'plan') => {
     if (!result) return;
     setDownloadOpen(false);
@@ -2581,6 +2627,7 @@ Análise prévia:
           }}
           onSavePlan={onSaveMealPlan ? handleSaveMealPlanAsActive : undefined}
           saving={savingPlan}
+          onRecalculateMacros={currentPatient ? handleRecalculateMacros : undefined}
         />
       )}
 

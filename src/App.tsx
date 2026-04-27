@@ -1830,6 +1830,53 @@ function TranscriptionView({
               buttonColor="emerald"
             />
           </div>
+
+          {/* Anthropometric data — inline (mirrors the popup version) */}
+          <div className="pt-2">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">
+              Dados clínicos <span className="text-slate-300 font-normal normal-case">(opcional, melhora sugestões da IA)</span>
+            </span>
+            <div className="grid grid-cols-3 gap-2 mb-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                placeholder="Peso (kg)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                value={patientWeight ?? ''}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value.replace(',', '.'));
+                  setPatientWeight(isNaN(v) || v <= 0 ? null : v);
+                }}
+              />
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder="Altura (cm)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                value={patientHeight ?? ''}
+                onChange={(e) => {
+                  const v = parseFloat(e.target.value.replace(',', '.'));
+                  setPatientHeight(isNaN(v) || v <= 0 ? null : v);
+                }}
+              />
+              <input
+                type="date"
+                placeholder="Nascimento"
+                title="Data de nascimento"
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                value={patientBirthDate || ''}
+                onChange={(e) => setPatientBirthDate(e.target.value)}
+              />
+            </div>
+            <input
+              type="text"
+              placeholder="Restrições / preferências (ex: vegetariana, sem lactose, alergia a amendoim)"
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg py-1.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+              value={patientRestrictions || ''}
+              onChange={(e) => setPatientRestrictions(e.target.value)}
+            />
+          </div>
         </div>
       )}
 

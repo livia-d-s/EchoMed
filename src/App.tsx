@@ -2,12 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Mic, Square, Pause, Play, Activity, User, FileText,
   ArrowLeft, Camera, Check, AlertTriangle, Loader2, Users, Pencil, Info, CheckCircle, Trash2,
-  ClipboardCheck, TrendingUp, Brain, Stethoscope, TestTube
+  ClipboardCheck, TrendingUp, Brain, Stethoscope, TestTube, Utensils
 } from 'lucide-react';
 import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingActivity } from '../types';
 import { PatientList, PatientPage } from './components/patient';
 import { ExamUploader } from './components/patient/ExamUploader';
 import { ConsultationBriefingBubble } from './components/patient/ConsultationBriefingBubble';
+import { MealPlanCard } from './components/patient/MealPlanCard';
 
 // Firebase Imports
 import {
@@ -859,7 +860,40 @@ export default function App() {
             }}
           />
         )}
-        {view === 'diagnosis' && <DiagnosisView result={currentResult} patientName={patientName} eventId={selectedEvent?.id} preferences={doctorProfile.preferences} doctorProfile={doctorProfile} consultationDate={selectedEvent?.date} onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }} onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }} />}
+        {view === 'diagnosis' && <DiagnosisView
+          result={currentResult}
+          patientName={patientName}
+          eventId={selectedEvent?.id}
+          preferences={doctorProfile.preferences}
+          doctorProfile={doctorProfile}
+          consultationDate={selectedEvent?.date}
+          currentPatient={(() => {
+            const pn = (patientName || '').trim().toLowerCase();
+            return pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
+          })()}
+          onSaveMealPlan={async (structuredPlan: any) => {
+            const pn = (patientName || '').trim().toLowerCase();
+            const target = pn ? patients.find((p: any) => p.name?.toLowerCase() === pn) : null;
+            if (!target) return;
+            // Convert structured plan to a MealPlan entry (text representation)
+            const text = JSON.stringify(structuredPlan, null, 2);
+            const newPlan: any = {
+              id: `plan_ai_${Date.now()}`,
+              fileName: `Plano_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`,
+              uploadedAt: new Date().toISOString(),
+              extractedText: text,
+              sizeBytes: text.length,
+              structuredPlan,
+            };
+            setPatients(prev => prev.map((p: any) =>
+              p.id === target.id
+                ? { ...p, mealPlans: [...(p.mealPlans || []), newPlan] }
+                : p
+            ));
+          }}
+          onSaveResult={(updatedResult: any) => { if (selectedEvent?.id) { updateEventResult(selectedEvent.id, updatedResult); setCurrentResult(updatedResult); } }}
+          onBack={() => { setView(selectedPatient ? 'patient' : 'transcription'); setCurrentTranscript(''); if (!selectedPatient) setPatientName(''); }}
+        />}
       </main>
 
       {/* Profile Popup */}
@@ -2107,7 +2141,7 @@ function TranscriptionView({
   );
 }
 
-function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate }: any) {
+function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, preferences, doctorProfile, consultationDate, currentPatient, onSaveMealPlan }: any) {
   const prefs = preferences || { showConduct: true, showAttention: true, showExams: true };
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editedRationale, setEditedRationale] = useState('');
@@ -2117,6 +2151,90 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'condition' | 'exam'; index: number } | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | 'referral' | null>(null);
+  // Editable structured meal plan (initialized from result if present)
+  const [mealPlan, setMealPlan] = useState<any>(result?.structuredMealPlan || null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [savingPlan, setSavingPlan] = useState(false);
+  const [planGenError, setPlanGenError] = useState<string | null>(null);
+
+  const handleGeneratePlan = async () => {
+    if (!currentPatient) {
+      setPlanGenError('Paciente não identificado.');
+      return;
+    }
+    setPlanGenError(null);
+    setGeneratingPlan(true);
+    try {
+      const auth = (await import('firebase/auth')).getAuth();
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) throw new Error('Sessão expirada. Faça login novamente.');
+
+      // Build anthropometry context (age computed from birthDate if present)
+      const ageFromBirth = currentPatient.birthDate
+        ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
+        : null;
+      const anthro: any = {};
+      if (currentPatient.weightKg) anthro.weightKg = currentPatient.weightKg;
+      if (currentPatient.heightCm) anthro.heightCm = currentPatient.heightCm;
+      if (ageFromBirth) anthro.age = ageFromBirth;
+      if (currentPatient.dietaryRestrictions) anthro.dietaryRestrictions = currentPatient.dietaryRestrictions;
+
+      const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+        ? 'https://echomed-p3tr.onrender.com'
+        : 'http://localhost:3001';
+
+      // Use the existing analysis transcript and ask only for the meal plan
+      const transcript = `Reaproveitamento da consulta atual para gerar plano alimentar estruturado.
+
+Análise prévia:
+- Avaliação: ${result.nutritionalAssessment || ''}
+- Racional: ${result.clinicalRationale || ''}
+- Conduta atual: ${result.nutritionalConduct || ''}
+- Objetivo: ${(currentPatient.goals || []).join(', ') || currentPatient.goal || 'não definido'}
+- Treino: ${(currentPatient.trainingRoutine || []).map((t: any) => `${t.type} ${t.frequency}`).join(', ') || 'não informado'}`;
+
+      const resp = await fetch(`${baseUrl}/api/analyze-medical`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          transcript,
+          tone: doctorProfile?.preferences?.tone || 'humanizado',
+          generateMealPlan: true,
+          patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.details || err.error || 'Erro ao gerar plano');
+      }
+      const data = await resp.json();
+      if (data.structuredMealPlan && Array.isArray(data.structuredMealPlan.meals)) {
+        setMealPlan(data.structuredMealPlan);
+        // Persist on the consultation event so it stays after navigating away
+        if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: data.structuredMealPlan });
+      } else {
+        setPlanGenError('A IA não retornou um plano estruturado. Tente novamente.');
+      }
+    } catch (err: any) {
+      console.error('Meal plan generation error:', err);
+      setPlanGenError(err.message || 'Erro ao gerar plano alimentar.');
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  const handleSaveMealPlanAsActive = async () => {
+    if (!mealPlan || !onSaveMealPlan) return;
+    setSavingPlan(true);
+    try {
+      await onSaveMealPlan(mealPlan);
+    } finally {
+      setSavingPlan(false);
+    }
+  };
 
   const handleDownload = async (kind: 'exams' | 'conduct' | 'referral') => {
     if (!result) return;
@@ -2439,6 +2557,43 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {/* Structured Meal Plan */}
+      {mealPlan ? (
+        <MealPlanCard
+          plan={mealPlan}
+          onChange={(next: any) => {
+            setMealPlan(next);
+            if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: next });
+          }}
+          onSavePlan={onSaveMealPlan ? handleSaveMealPlanAsActive : undefined}
+          saving={savingPlan}
+        />
+      ) : (
+        <div className="bg-white rounded-2xl md:rounded-3xl border border-dashed border-blue-300 p-5 md:p-6 text-center">
+          <div className="flex flex-col items-center gap-2">
+            <Utensils size={20} className="text-blue-600" />
+            <p className="text-sm text-slate-700 font-bold">Plano alimentar estruturado</p>
+            <p className="text-xs text-slate-500 max-w-md">
+              Gere um plano-base com refeições, alimentos e substituições baseado nesta consulta. Você pode editar tudo antes de entregar à paciente.
+            </p>
+            <button
+              onClick={handleGeneratePlan}
+              disabled={generatingPlan}
+              className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-sm transition-colors disabled:opacity-60"
+            >
+              {generatingPlan ? (
+                <><Loader2 size={14} className="animate-spin" /> Gerando plano…</>
+              ) : (
+                <><Utensils size={14} /> Sugerir plano alimentar</>
+              )}
+            </button>
+            {planGenError && (
+              <p className="text-xs text-red-600 mt-2">{planGenError}</p>
+            )}
+          </div>
         </div>
       )}
 

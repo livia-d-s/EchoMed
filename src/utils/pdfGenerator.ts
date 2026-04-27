@@ -14,6 +14,7 @@ interface AnalysisResult {
   recommendedExams?: string[];
   nutritionalConduct?: string;
   patientFriendlyConduct?: string;
+  medicalReferralSummary?: string;
   possibleAssociatedConditions?: string[];
 }
 
@@ -69,29 +70,12 @@ async function loadPdfMake(): Promise<any> {
   return pdfMake;
 }
 
-// Trigger download via blob + temporary anchor.
-// Using pdfMake.createPdf().download() can fail silently on the second call
-// in some browsers; manual blob download is more reliable.
-async function downloadPdf(pdfMake: any, docDef: any, fileName: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    try {
-      pdfMake.createPdf(docDef).getBlob((blob: Blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          resolve();
-        }, 100);
-      });
-    } catch (err) {
-      reject(err);
-    }
-  });
+// Use pdfmake's native download. Append a timestamp to filename to avoid
+// browsers deduping/blocking successive downloads with identical names.
+function downloadPdf(pdfMake: any, docDef: any, fileName: string): void {
+  const ts = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+  const finalName = fileName.replace(/\.pdf$/, `_${ts}.pdf`);
+  pdfMake.createPdf(docDef).download(finalName);
 }
 
 function buildHeader(profile: NutriProfile, brand: string): any[] {
@@ -278,7 +262,7 @@ export async function generateExamRequestPdf(
 
   const pdfMake = await loadPdfMake();
   const fileName = `Pedido_Exames_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-  await downloadPdf(pdfMake, docDef, fileName);
+  downloadPdf(pdfMake, docDef, fileName);
 }
 
 export async function generateConductPdf(
@@ -339,5 +323,89 @@ export async function generateConductPdf(
 
   const pdfMake = await loadPdfMake();
   const fileName = `Conduta_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-  await downloadPdf(pdfMake, docDef, fileName);
+  downloadPdf(pdfMake, docDef, fileName);
+}
+
+export async function generateMedicalReferralPdf(
+  result: AnalysisResult,
+  patientName: string,
+  consultationDate: any,
+  profile: NutriProfile,
+): Promise<void> {
+  const brand = profile.brandColor || DEFAULT_BRAND;
+  const dateStr = formatDate(consultationDate) || formatDate(new Date());
+  const summary = (result.medicalReferralSummary || '').trim();
+
+  // Split into paragraphs for cleaner reading
+  const paragraphs = summary
+    ? summary.split(/\n{2,}|(?<=\.)\s{2,}/g).map((p) => p.trim()).filter(Boolean)
+    : [];
+
+  const exams = result.recommendedExams || [];
+
+  const docDef: any = {
+    pageSize: 'A4',
+    pageMargins: [40, 50, 40, 40],
+    content: [
+      ...buildHeader(profile, brand),
+      { text: 'ENCAMINHAMENTO', style: 'tinyLabel', color: brand },
+      { text: 'Resumo Clínico', style: 'documentTitle' },
+      buildPatientBlock(patientName || 'Paciente', dateStr, brand),
+
+      { text: 'Prezado(a) Colega,', style: 'body', margin: [0, 8, 0, 14] },
+
+      ...(paragraphs.length > 0
+        ? paragraphs.map((p) => ({
+            text: p,
+            style: 'body',
+            margin: [0, 0, 0, 12],
+            alignment: 'justify',
+          }))
+        : [
+            {
+              text:
+                'Resumo de encaminhamento não disponível para esta consulta. Verifique se a análise gerou conteúdo clínico relevante.',
+              style: 'body',
+              italics: true,
+            },
+          ]),
+
+      ...(exams.length > 0
+        ? [
+            { text: 'EXAMES SOLICITADOS PELA NUTRIÇÃO', style: 'sectionHeader' },
+            {
+              ul: exams.map((e) => ({ text: e, margin: [0, 0, 0, 4] })),
+              style: 'body',
+            },
+          ]
+        : []),
+
+      {
+        text:
+          'Permaneço à disposição para troca de informações que possam contribuir com a conduta integrada.',
+        style: 'body',
+        margin: [0, 16, 0, 0],
+      },
+
+      {
+        canvas: [{ type: 'line', x1: 0, y1: 8, x2: 240, y2: 8, lineWidth: 0.5, lineColor: '#94A3B8' }],
+        margin: [0, 60, 0, 4],
+      },
+      { text: profile.name || 'Nutricionista', style: 'patientName' },
+      {
+        text: [
+          profile.specialty || '',
+          profile.crm ? `  •  CRN ${profile.crm}` : '',
+        ].join(''),
+        style: 'nutriDetails',
+      },
+    ],
+    styles: commonStyles(brand),
+    footer: buildFooter(brand),
+    defaultStyle: { font: 'Roboto' },
+  };
+
+  const pdfMake = await loadPdfMake();
+  const fileName = `Encaminhamento_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
+  downloadPdf(pdfMake, docDef, fileName);
 }

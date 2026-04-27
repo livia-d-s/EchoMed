@@ -13,6 +13,7 @@ interface AnalysisResult {
   clinicalRationale?: string;
   recommendedExams?: string[];
   nutritionalConduct?: string;
+  patientFriendlyConduct?: string;
   possibleAssociatedConditions?: string[];
 }
 
@@ -58,8 +59,39 @@ async function loadPdfMake(): Promise<any> {
   ]);
   // pdfmake expects vfs to be set on the instance
   const fonts: any = fontsModule;
-  pdfMake.vfs = fonts.pdfMake?.vfs || fonts.default?.pdfMake?.vfs || fonts.vfs || fonts.default?.vfs;
+  const vfs =
+    fonts.pdfMake?.vfs ||
+    fonts.default?.pdfMake?.vfs ||
+    fonts.vfs ||
+    fonts.default?.vfs ||
+    fonts.default;
+  if (vfs) pdfMake.vfs = vfs;
   return pdfMake;
+}
+
+// Trigger download via blob + temporary anchor.
+// Using pdfMake.createPdf().download() can fail silently on the second call
+// in some browsers; manual blob download is more reliable.
+async function downloadPdf(pdfMake: any, docDef: any, fileName: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      pdfMake.createPdf(docDef).getBlob((blob: Blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          resolve();
+        }, 100);
+      });
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 function buildHeader(profile: NutriProfile, brand: string): any[] {
@@ -149,7 +181,7 @@ function commonStyles(brand: string): Record<string, any> {
     patientName: { fontSize: 13, bold: true, color: '#0F172A' },
     body: { fontSize: 11, color: '#334155', lineHeight: 1.5 },
     examItem: { fontSize: 11, color: '#0F172A', margin: [0, 0, 0, 4] },
-    priorityBadge: { fontSize: 7, bold: true, characterSpacing: 1, color: '#FFFFFF' },
+    priorityBadge: { fontSize: 8, bold: true, characterSpacing: 1.2, color: '#0F172A' },
     footer: { fontSize: 7, color: '#94A3B8', alignment: 'center' },
     disclaimer: { fontSize: 8, color: '#94A3B8', italics: true, margin: [0, 16, 0, 0] },
   };
@@ -182,30 +214,25 @@ export async function generateExamRequestPdf(
     return 'Complementar';
   };
 
-  const examPriorityColor = (i: number): string => {
-    if (i === 0) return '#E11D48';
-    if (i === 1) return '#D97706';
-    return '#0EA5E9';
-  };
-
+  // B&W priority pill: thin black outline, black uppercase text — clinical look
   const examTable = {
     table: {
       widths: ['*', 'auto'],
       body: [
         ...exams.map((exam, i) => [
-          { text: `•  ${exam}`, style: 'examItem', margin: [0, 6, 0, 6] },
+          { text: `•  ${exam}`, style: 'examItem', margin: [0, 8, 0, 8] },
           {
             text: examPriorityLabel(i).toUpperCase(),
             style: 'priorityBadge',
-            fillColor: examPriorityColor(i),
             alignment: 'center',
-            margin: [8, 6, 8, 6],
+            margin: [10, 8, 10, 8],
           },
         ]),
       ],
     },
     layout: {
-      hLineWidth: () => 0.5,
+      hLineWidth: (i: number, node: any) =>
+        i === 0 || i === node.table.body.length ? 0 : 0.5,
       vLineWidth: () => 0,
       hLineColor: () => '#E2E8F0',
       paddingLeft: () => 0,
@@ -251,7 +278,7 @@ export async function generateExamRequestPdf(
 
   const pdfMake = await loadPdfMake();
   const fileName = `Pedido_Exames_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-  pdfMake.createPdf(docDef).download(fileName);
+  await downloadPdf(pdfMake, docDef, fileName);
 }
 
 export async function generateConductPdf(
@@ -262,60 +289,55 @@ export async function generateConductPdf(
 ): Promise<void> {
   const brand = profile.brandColor || DEFAULT_BRAND;
   const dateStr = formatDate(consultationDate) || formatDate(new Date());
-  const conductSteps = parseSteps(result.nutritionalConduct);
-  const attentionPoints = result.possibleAssociatedConditions || [];
 
-  const conductList = conductSteps.length > 0
-    ? {
-        ol: conductSteps.map((s) => ({
-          text: s.trim().replace(/\.$/, ''),
-          margin: [0, 0, 0, 8],
-        })),
-        style: 'body',
-      }
-    : { text: 'Sem conduta registrada.', style: 'body', italics: true };
+  // Patient-facing conduct: prefer the AI's friendly version; fall back to
+  // a soft rephrasing of the technical conduct only if the new field isn't
+  // available (e.g. older consultations generated before this prompt).
+  const friendlyText = (result.patientFriendlyConduct || '').trim();
+
+  const conductBody: any[] = friendlyText
+    ? [{ text: friendlyText, style: 'patientBody' }]
+    : (() => {
+        const steps = parseSteps(result.nutritionalConduct);
+        if (steps.length === 0) {
+          return [{ text: 'Sem orientações registradas.', style: 'patientBody', italics: true }];
+        }
+        return [{
+          ol: steps.map((s) => ({
+            text: s.trim().replace(/\.$/, ''),
+            margin: [0, 0, 0, 8],
+          })),
+          style: 'patientBody',
+        }];
+      })();
 
   const docDef: any = {
     pageSize: 'A4',
     pageMargins: [40, 40, 40, 40],
     content: [
       ...buildHeader(profile, brand),
-      { text: 'CONDUTA NUTRICIONAL', style: 'tinyLabel', color: brand },
-      { text: 'Orientações da Consulta', style: 'documentTitle' },
+      { text: 'PARA VOCÊ', style: 'tinyLabel', color: brand },
+      { text: 'Suas orientações da consulta', style: 'documentTitle' },
       buildPatientBlock(patientName || 'Paciente', dateStr, brand),
 
-      ...(result.nutritionalAssessment
-        ? [
-            { text: 'AVALIAÇÃO', style: 'sectionHeader' },
-            { text: result.nutritionalAssessment, style: 'body' },
-          ]
-        : []),
-
-      { text: 'CONDUTA', style: 'sectionHeader' },
-      conductList,
-
-      ...(attentionPoints.length > 0
-        ? [
-            { text: 'PONTOS DE ATENÇÃO', style: 'sectionHeader' },
-            {
-              ul: attentionPoints.map((p) => ({ text: p, margin: [0, 0, 0, 4] })),
-              style: 'body',
-            },
-          ]
-        : []),
+      { text: 'O QUE COMBINAMOS', style: 'sectionHeader' },
+      ...conductBody,
 
       {
         text:
-          'Documento informativo para acompanhamento nutricional. Não substitui orientação médica para condições clínicas.',
+          'Em caso de dúvidas, fale com sua nutricionista. Estes são pontos práticos do que conversamos.',
         style: 'disclaimer',
       },
     ],
-    styles: commonStyles(brand),
+    styles: {
+      ...commonStyles(brand),
+      patientBody: { fontSize: 12, color: '#1E293B', lineHeight: 1.6 },
+    },
     footer: buildFooter(brand),
     defaultStyle: { font: 'Roboto' },
   };
 
   const pdfMake = await loadPdfMake();
   const fileName = `Conduta_${sanitize(patientName || 'paciente')}_${formatDate(new Date()).replace(/\//g, '-')}.pdf`;
-  pdfMake.createPdf(docDef).download(fileName);
+  await downloadPdf(pdfMake, docDef, fileName);
 }

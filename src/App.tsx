@@ -2025,19 +2025,21 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [editedExams, setEditedExams] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'condition' | 'exam'; index: number } | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | 'referral' | null>(null);
 
-  const handleDownload = async (kind: 'exams' | 'conduct') => {
+  const handleDownload = async (kind: 'exams' | 'conduct' | 'referral') => {
     if (!result) return;
     setDownloadOpen(false);
     setGeneratingPdf(kind);
     try {
-      const { generateExamRequestPdf, generateConductPdf } = await import('./utils/pdfGenerator');
+      const { generateExamRequestPdf, generateConductPdf, generateMedicalReferralPdf } = await import('./utils/pdfGenerator');
       const profile = doctorProfile || {};
       if (kind === 'exams') {
         await generateExamRequestPdf(result, patientName, consultationDate, profile);
-      } else {
+      } else if (kind === 'conduct') {
         await generateConductPdf(result, patientName, consultationDate, profile);
+      } else {
+        await generateMedicalReferralPdf(result, patientName, consultationDate, profile);
       }
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -2225,12 +2227,22 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
                 </button>
                 <button
                   onClick={() => handleDownload('conduct')}
-                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100"
                 >
                   <ClipboardCheck size={16} className="text-emerald-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="font-bold text-sm text-slate-800">Conduta Nutricional</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">Orientações para o paciente</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleDownload('referral')}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <Stethoscope size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Encaminhamento Médico</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">Resumo clínico para o médico</div>
                   </div>
                 </button>
               </div>

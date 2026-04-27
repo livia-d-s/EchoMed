@@ -171,6 +171,7 @@ sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
   "recommendedExams": ["exame laboratorial ou avaliação complementar 1", "exame 2"],
   "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada",
   "patientFriendlyConduct": "Versão da conduta escrita diretamente PARA a paciente, em segunda pessoa, com tom acolhedor e justificativa baseada no contexto dela",
+  "medicalReferralSummary": "Resumo técnico para encaminhamento médico, em linguagem clínica formal",
   "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"],
   "extractedTraining": [{"type": "Musculação", "frequency": "4x/semana"}],
   "suggestedNextQuestions": ["sugestão 1", "sugestão 2", "sugestão 3"],
@@ -231,6 +232,18 @@ Regras para o campo patientFriendlyConduct (CRÍTICO):
 - Termine com uma palavra de incentivo curta
 - NÃO mencione hipóteses clínicas, diagnósticos diferenciais, exames laboratoriais ou condições médicas — isso é só pra nutri
 - NÃO repita o nutritionalConduct literalmente; é uma reformulação humanizada
+
+Regras para o campo medicalReferralSummary:
+- Escreva em LINGUAGEM CLÍNICA FORMAL, dirigida ao médico (não à paciente)
+- Estrutura sugerida (3 parágrafos curtos):
+  * Parágrafo 1: identificação e queixa principal — "Paciente do sexo feminino, [idade se mencionada], em acompanhamento nutricional, apresenta [queixa principal] associada a [contexto relevante: rotina, treino, sono, etc.]"
+  * Parágrafo 2: hipóteses clínicas e achados objetivos — citar dados de exames laboratoriais quando disponíveis (com valores), referir hipóteses de desequilíbrios (ex: "sugestivo de anemia ferropriva", "perfil compatível com SOP", "padrão de inflamação subclínica")
+  * Parágrafo 3: solicitação de avaliação — "Solicito avaliação especializada para [conduta esperada do médico: confirmação diagnóstica, prescrição, exames complementares]. Encaminho para esclarecimento e conduta médica conforme indicação clínica."
+- Use terminologia técnica apropriada (ex: "ferritina", "TSH", "perfil glicêmico", "dislipidemia", "disautonomia")
+- NÃO inclua a conduta nutricional já realizada — o médico tem o plano se precisar
+- 6 a 12 frases no total
+- Tom profissional e objetivo, sem floreio emocional
+- Se a paciente claramente não precisa de encaminhamento médico (queixas estritamente nutricionais sem sinais de alarme), retorne string vazia ""
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

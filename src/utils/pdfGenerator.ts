@@ -55,19 +55,39 @@ const parseSteps = (text?: string): string[] => {
 
 // Lazy loader for pdfmake (~600KB chunk; only loaded when nutri actually downloads)
 async function loadPdfMake(): Promise<any> {
-  const [{ default: pdfMake }, fontsModule] = await Promise.all([
+  const [pdfMakeModule, fontsModule] = await Promise.all([
     import('pdfmake/build/pdfmake' as any),
     import('pdfmake/build/vfs_fonts' as any),
   ]);
-  // pdfmake expects vfs to be set on the instance
+  const pdfMake: any = pdfMakeModule.default || pdfMakeModule;
+
+  // pdfmake 0.2.x: vfs_fonts exports { pdfMake: { vfs } }
+  // pdfmake 0.3.x: vfs_fonts exports the vfs object directly via default
   const fonts: any = fontsModule;
   const vfs =
     fonts.pdfMake?.vfs ||
     fonts.default?.pdfMake?.vfs ||
     fonts.vfs ||
-    fonts.default?.vfs ||
-    fonts.default;
-  if (vfs) pdfMake.vfs = vfs;
+    (fonts.default && typeof fonts.default === 'object' && 'Roboto-Regular.ttf' in fonts.default ? fonts.default : null) ||
+    (typeof fonts === 'object' && 'Roboto-Regular.ttf' in fonts ? fonts : null);
+
+  if (vfs) {
+    pdfMake.vfs = vfs;
+  } else {
+    console.warn('pdfmake vfs not found in expected locations; PDF font may fail');
+  }
+
+  // Explicit font config so pdfmake knows exactly which file to use for each
+  // weight/style. Avoids "Roboto-Medium.ttf not found" when bold text is rendered.
+  pdfMake.fonts = {
+    Roboto: {
+      normal: 'Roboto-Regular.ttf',
+      bold: 'Roboto-Medium.ttf',
+      italics: 'Roboto-Italic.ttf',
+      bolditalics: 'Roboto-MediumItalic.ttf',
+    },
+  };
+
   return pdfMake;
 }
 

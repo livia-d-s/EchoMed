@@ -2150,7 +2150,7 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [editedExams, setEditedExams] = useState<string[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'condition' | 'exam'; index: number } | null>(null);
   const [downloadOpen, setDownloadOpen] = useState(false);
-  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | 'referral' | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState<'exams' | 'conduct' | 'referral' | 'plan' | null>(null);
   // Editable structured meal plan (initialized from result if present)
   const [mealPlan, setMealPlan] = useState<any>(result?.structuredMealPlan || null);
   const [generatingPlan, setGeneratingPlan] = useState(false);
@@ -2236,19 +2236,28 @@ Análise prévia:
     }
   };
 
-  const handleDownload = async (kind: 'exams' | 'conduct' | 'referral') => {
+  const handleDownload = async (kind: 'exams' | 'conduct' | 'referral' | 'plan') => {
     if (!result) return;
     setDownloadOpen(false);
     setGeneratingPdf(kind);
     try {
-      const { generateExamRequestPdf, generateConductPdf, generateMedicalReferralPdf } = await import('./utils/pdfGenerator');
+      const {
+        generateExamRequestPdf,
+        generateConductPdf,
+        generateMedicalReferralPdf,
+        generateMealPlanPdf,
+      } = await import('./utils/pdfGenerator');
       const profile = doctorProfile || {};
+      // Always pass the latest mealPlan state into the result for the plan PDF
+      const resultForPdf = { ...result, structuredMealPlan: mealPlan || result.structuredMealPlan };
       if (kind === 'exams') {
-        await generateExamRequestPdf(result, patientName, consultationDate, profile);
+        await generateExamRequestPdf(resultForPdf, patientName, consultationDate, profile);
       } else if (kind === 'conduct') {
-        await generateConductPdf(result, patientName, consultationDate, profile);
+        await generateConductPdf(resultForPdf, patientName, consultationDate, profile);
+      } else if (kind === 'referral') {
+        await generateMedicalReferralPdf(resultForPdf, patientName, consultationDate, profile);
       } else {
-        await generateMedicalReferralPdf(result, patientName, consultationDate, profile);
+        await generateMealPlanPdf(resultForPdf, patientName, consultationDate, profile);
       }
     } catch (err) {
       console.error('Failed to generate PDF:', err);
@@ -2446,12 +2455,28 @@ Análise prévia:
                 </button>
                 <button
                   onClick={() => handleDownload('referral')}
-                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left"
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100"
                 >
                   <Stethoscope size={16} className="text-indigo-500 mt-0.5 flex-shrink-0" />
                   <div>
                     <div className="font-bold text-sm text-slate-800">Encaminhamento Médico</div>
                     <div className="text-[11px] text-slate-500 mt-0.5">Resumo clínico para o médico</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => handleDownload('plan')}
+                  disabled={!mealPlan && !result?.structuredMealPlan}
+                  className="w-full flex items-start gap-3 px-4 py-3 hover:bg-slate-50 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                  title={!mealPlan && !result?.structuredMealPlan ? 'Gere um plano alimentar primeiro' : ''}
+                >
+                  <Utensils size={16} className="text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <div className="font-bold text-sm text-slate-800">Plano Alimentar</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {mealPlan || result?.structuredMealPlan
+                        ? 'Refeições com substituições'
+                        : 'Gere um plano primeiro'}
+                    </div>
                   </div>
                 </button>
               </div>

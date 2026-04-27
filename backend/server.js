@@ -170,6 +170,7 @@ sem markdown, sem explicações externas, seguindo exatamente esta estrutura:
   "possibleAssociatedConditions": ["condição ou desequilíbrio possível 1", "condição ou desequilíbrio possível 2"],
   "recommendedExams": ["exame laboratorial ou avaliação complementar 1", "exame 2"],
   "nutritionalConduct": "orientações nutricionais iniciais e conduta recomendada",
+  "patientFriendlyConduct": "Versão da conduta escrita diretamente PARA a paciente, em segunda pessoa, com tom acolhedor e justificativa baseada no contexto dela",
   "patientHighlights": ["frase curta relevante 1", "frase curta relevante 2"],
   "extractedTraining": [{"type": "Musculação", "frequency": "4x/semana"}],
   "suggestedNextQuestions": ["sugestão 1", "sugestão 2", "sugestão 3"],
@@ -219,6 +220,17 @@ Regras para o campo behavioralProfile:
 - Exemplos: "resistente", "motivada", "ansiosa", "oscilante", "comprometida", "analítica", "impulsiva", "conservadora", "ambivalente"
 - Escolha o adjetivo mais representativo com base na fala/postura da paciente
 - Se não há dados suficientes, retorne "neutra"
+
+Regras para o campo patientFriendlyConduct (CRÍTICO):
+- Escreva DIRETAMENTE PARA A PACIENTE em SEGUNDA PESSOA ("você") — NUNCA em terceira pessoa
+- Tom acolhedor, motivacional e empático, como se fosse uma conversa pessoal
+- Comece justificando com base no contexto que ela trouxe (ex: "Já que você está com um bebê recém-nascido em casa e relatou pouco tempo, vamos seguir assim:")
+- Em seguida, dê 3 a 5 ações práticas e claras (use bullets implícitos no texto, ou numeração 1, 2, 3 dentro do texto)
+- Linguagem simples, SEM jargão técnico (evite "macronutrientes", "ingestão proteica", "índice glicêmico" — use "proteínas", "comer", "açúcar no sangue")
+- 4 a 8 frases no total
+- Termine com uma palavra de incentivo curta
+- NÃO mencione hipóteses clínicas, diagnósticos diferenciais, exames laboratoriais ou condições médicas — isso é só pra nutri
+- NÃO repita o nutritionalConduct literalmente; é uma reformulação humanizada
 
 Se alguma informação estiver ausente na transcrição,
 mencione a necessidade de investigação adicional dentro do campo apropriado,

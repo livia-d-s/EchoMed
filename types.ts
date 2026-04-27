@@ -67,8 +67,13 @@ export interface Patient {
   name: string;
   phone?: string;
   email?: string;
-  birthDate?: string;
+  birthDate?: string;            // ISO date — used to compute age
   createdAt: string;
+  // Anthropometric data (optional, used for structured meal plan)
+  weightKg?: number;
+  heightCm?: number;
+  // Dietary restrictions / preferences (free-text, e.g. "vegetariana, sem lactose")
+  dietaryRestrictions?: string;
   // New nutrition-focused fields
   goal?: PatientGoal;            // Legacy single goal (for backwards compat)
   goals?: PatientGoal[];         // Supports up to 2 goals
@@ -78,6 +83,33 @@ export interface Patient {
   highlights?: string[];         // AI-extracted key patient insights (persists across consultations)
   exams?: PatientExam[];         // Uploaded lab result PDFs (extracted text)
   mealPlans?: MealPlan[];        // Uploaded meal plan PDFs (most recent is the active one)
+}
+
+// ============ MEAL PLAN STRUCTURED TYPES ============
+
+export type MealItemCategory = 'carbo' | 'proteina' | 'gordura' | 'fruta' | 'vegetal' | 'lacteo' | 'outro';
+
+export interface StructuredMealItem {
+  food: string;                  // e.g. "1 fatia de pão integral"
+  category?: MealItemCategory;
+  substitutions?: string[];      // 2-4 equivalents in matching quantity
+}
+
+export interface StructuredMeal {
+  name: string;                  // e.g. "Café da manhã"
+  time?: string;                 // e.g. "07:00"
+  items: StructuredMealItem[];
+}
+
+export interface StructuredMealPlan {
+  meals: StructuredMeal[];
+  notes?: string;                // hidration, supplements, general guidance
+  macroEstimate?: {              // optional, only if anthropometric data is available
+    calories?: number;
+    protein?: string;
+    carbs?: string;
+    fat?: string;
+  };
 }
 
 export interface PatientExam {

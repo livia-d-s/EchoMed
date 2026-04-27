@@ -197,6 +197,11 @@ export default function App() {
   const [currentPatientGoalCustom, setCurrentPatientGoalCustom] = useState('');
   const [currentPatientTraining, setCurrentPatientTraining] = useState<TrainingActivity[]>([]);
   const [currentIsFirstConsultation, setCurrentIsFirstConsultation] = useState<boolean | null>(null);
+  // Anthropometric data captured at consultation start — applied to patient on finalize
+  const [currentPatientWeight, setCurrentPatientWeight] = useState<number | null>(null);
+  const [currentPatientHeight, setCurrentPatientHeight] = useState<number | null>(null);
+  const [currentPatientBirthDate, setCurrentPatientBirthDate] = useState<string>('');
+  const [currentPatientRestrictions, setCurrentPatientRestrictions] = useState<string>('');
 
   // Show toast notification
   const showToast = (message: string) => {
@@ -646,10 +651,20 @@ export default function App() {
         )
       );
 
-      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0 || newMealPlans.length > 0) {
+      // Anthropometric data captured this consultation — fill if patient doesn't have it yet
+      const anthropoChanges: any = {};
+      if (currentPatientWeight && !patient.weightKg) anthropoChanges.weightKg = currentPatientWeight;
+      if (currentPatientHeight && !patient.heightCm) anthropoChanges.heightCm = currentPatientHeight;
+      if (currentPatientBirthDate && !patient.birthDate) anthropoChanges.birthDate = currentPatientBirthDate;
+      if (currentPatientRestrictions && !patient.dietaryRestrictions) {
+        anthropoChanges.dietaryRestrictions = currentPatientRestrictions;
+      }
+      const hasAnthropoChanges = Object.keys(anthropoChanges).length > 0;
+
+      if (newHighlights.length > 0 || rawTraining.length > 0 || newExams.length > 0 || newMealPlans.length > 0 || hasAnthropoChanges) {
         setPatients(prev => prev.map(p => {
           if (p.id !== patient.id) return p;
-          const updated: any = { ...p };
+          const updated: any = { ...p, ...anthropoChanges };
           if (newHighlights.length > 0) {
             updated.highlights = [...existingHighlights, ...newHighlights];
           }
@@ -772,6 +787,10 @@ export default function App() {
               isFirstConsultation={currentIsFirstConsultation} setIsFirstConsultation={setCurrentIsFirstConsultation}
               pendingExams={pendingExams} setPendingExams={setPendingExams}
               pendingMealPlans={pendingMealPlans} setPendingMealPlans={setPendingMealPlans}
+              patientWeight={currentPatientWeight} setPatientWeight={setCurrentPatientWeight}
+              patientHeight={currentPatientHeight} setPatientHeight={setCurrentPatientHeight}
+              patientBirthDate={currentPatientBirthDate} setPatientBirthDate={setCurrentPatientBirthDate}
+              patientRestrictions={currentPatientRestrictions} setPatientRestrictions={setCurrentPatientRestrictions}
             />
             <ConsultationBriefingBubble
               events={events}
@@ -1272,7 +1291,11 @@ function TranscriptionView({
   patientGoals, setPatientGoals, patientGoalCustom, setPatientGoalCustom,
   patientTraining, setPatientTraining, isFirstConsultation, setIsFirstConsultation,
   pendingExams, setPendingExams,
-  pendingMealPlans, setPendingMealPlans
+  pendingMealPlans, setPendingMealPlans,
+  patientWeight, setPatientWeight,
+  patientHeight, setPatientHeight,
+  patientBirthDate, setPatientBirthDate,
+  patientRestrictions, setPatientRestrictions
 }: any) {
   const recognitionRef = useRef<any>(null);
   const transcriptContainerRef = useRef<HTMLDivElement>(null);
@@ -1283,6 +1306,10 @@ function TranscriptionView({
   const [tempGoals, setTempGoals] = useState<PatientGoal[]>([]);
   const [tempGoalCustom, setTempGoalCustom] = useState('');
   const [tempTraining, setTempTraining] = useState('');
+  const [tempWeight, setTempWeight] = useState<string>('');
+  const [tempHeight, setTempHeight] = useState<string>('');
+  const [tempBirthDate, setTempBirthDate] = useState<string>('');
+  const [tempRestrictions, setTempRestrictions] = useState<string>('');
   const [tempIsFirst, setTempIsFirst] = useState<boolean | null>(null);
   const [inlineTrainingText, setInlineTrainingText] = useState('');
 
@@ -1442,6 +1469,10 @@ function TranscriptionView({
       setTempGoalCustom('');
       setTempTraining('');
       setTempIsFirst(null);
+      setTempWeight('');
+      setTempHeight('');
+      setTempBirthDate('');
+      setTempRestrictions('');
       setPendingExams([]);
       setPendingMealPlans([]);
       setShowNamePopup(true);
@@ -1461,6 +1492,14 @@ function TranscriptionView({
     if (tempGoalCustom) setPatientGoalCustom(tempGoalCustom);
     if (tempTraining.trim()) setPatientTraining(parseTraining(tempTraining));
     if (tempIsFirst !== null) setIsFirstConsultation(tempIsFirst);
+
+    // Anthropometric data (only set if filled)
+    const w = parseFloat((tempWeight || '').replace(',', '.'));
+    if (!isNaN(w) && w > 0) setPatientWeight(w);
+    const h = parseFloat((tempHeight || '').replace(',', '.'));
+    if (!isNaN(h) && h > 0) setPatientHeight(h);
+    if (tempBirthDate) setPatientBirthDate(tempBirthDate);
+    if (tempRestrictions.trim()) setPatientRestrictions(tempRestrictions.trim());
 
     setShowNamePopup(false);
     if (pendingAction === 'record') {
@@ -1892,6 +1931,11 @@ function TranscriptionView({
                           // Pre-load existing exams + meal plans so nutri sees them
                           if (p.exams?.length) setPendingExams(p.exams);
                           if (p.mealPlans?.length) setPendingMealPlans(p.mealPlans);
+                          // Pre-load anthropometric data
+                          if (p.weightKg) setTempWeight(String(p.weightKg));
+                          if (p.heightCm) setTempHeight(String(p.heightCm));
+                          if (p.birthDate) setTempBirthDate(p.birthDate);
+                          if (p.dietaryRestrictions) setTempRestrictions(p.dietaryRestrictions);
                           setShowPopupSuggestions(false);
                         }}
                       >
@@ -1981,7 +2025,7 @@ function TranscriptionView({
             </div>
 
             {/* Meal plan upload (optional, useful for migration from other apps) */}
-            <div className="mb-5">
+            <div className="mb-4">
               <ExamUploader
                 exams={pendingMealPlans}
                 onChange={setPendingMealPlans}
@@ -1990,6 +2034,53 @@ function TranscriptionView({
                 emptyMessage="Nenhum plano. Anexe o plano atual da paciente (importar de outro app ou plano vigente)."
                 idPrefix="plan"
                 buttonColor="emerald"
+              />
+            </div>
+
+            {/* Anthropometric data — used by AI to suggest meal plans (all optional) */}
+            <div className="mb-5 pt-4 border-t border-slate-100">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Dados clínicos <span className="text-slate-300 font-normal normal-case">(opcional, melhora sugestões da IA)</span>
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    placeholder="Peso (kg)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                    value={tempWeight}
+                    onChange={(e) => setTempWeight(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Altura (cm)"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                    value={tempHeight}
+                    onChange={(e) => setTempHeight(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <input
+                    type="date"
+                    placeholder="Nascimento"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all"
+                    value={tempBirthDate}
+                    onChange={(e) => setTempBirthDate(e.target.value)}
+                    title="Data de nascimento"
+                  />
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Restrições / preferências (ex: vegetariana, sem lactose, alergia a amendoim)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 outline-none text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-300 transition-all mt-2"
+                value={tempRestrictions}
+                onChange={(e) => setTempRestrictions(e.target.value)}
               />
             </div>
 

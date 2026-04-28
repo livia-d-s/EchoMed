@@ -8,7 +8,7 @@ import { Patient, TimelineEvent, EventType, PatientGoal, GOAL_LABELS, TrainingAc
 import { PatientList, PatientPage } from './components/patient';
 import { ExamUploader } from './components/patient/ExamUploader';
 import { ConsultationBriefingBubble } from './components/patient/ConsultationBriefingBubble';
-import { MealPlanCard } from './components/patient/MealPlanCard';
+import { MealPlanCard, planSignature } from './components/patient/MealPlanCard';
 import { MealPlanBubble } from './components/patient/MealPlanBubble';
 
 // Firebase Imports
@@ -849,6 +849,14 @@ export default function App() {
               ));
               if (selectedPatient?.id === patientId) {
                 setSelectedPatient(prev => prev ? { ...prev, mealPlans } : null);
+              }
+            }}
+            onUpdatePatient={(patientId: string, changes: any) => {
+              setPatients(prev => prev.map(p =>
+                p.id === patientId ? { ...p, ...changes } : p
+              ));
+              if (selectedPatient?.id === patientId) {
+                setSelectedPatient(prev => prev ? { ...prev, ...changes } : null);
               }
             }}
             onEventClick={(event) => {
@@ -2150,6 +2158,37 @@ function DiagnosisView({ result, patientName, eventId, onSaveResult, onBack, pre
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
   const [planGenError, setPlanGenError] = useState<string | null>(null);
+  // Signature of the plan when it was last saved as active — for dedupe
+  const [savedPlanSignature, setSavedPlanSignature] = useState<string | null>(null);
+
+  // Compute objective for the plan title:
+  // 1) explicit patient goals/goal, 2) BMI-derived if anthropometry available, 3) null.
+  const planObjective = (() => {
+    if (!currentPatient) return null;
+    const goals = currentPatient.goals as PatientGoal[] | undefined;
+    if (goals && goals.length > 0) {
+      return goals
+        .map((g: PatientGoal) => (g === 'outro' ? currentPatient.goalCustom : GOAL_LABELS[g]))
+        .filter(Boolean)
+        .join(' + ')
+        .toLowerCase();
+    }
+    if (currentPatient.goal) {
+      return currentPatient.goal === 'outro'
+        ? (currentPatient.goalCustom || '').toLowerCase()
+        : GOAL_LABELS[currentPatient.goal as PatientGoal].toLowerCase();
+    }
+    const w = Number(currentPatient.weightKg);
+    const h = Number(currentPatient.heightCm);
+    if (w > 0 && h > 0) {
+      const bmi = w / Math.pow(h / 100, 2);
+      if (bmi < 18.5) return 'ganho de peso';
+      if (bmi < 25) return 'manutenção';
+      if (bmi < 30) return 'emagrecimento';
+      return 'emagrecimento prioritário';
+    }
+    return null;
+  })();
 
   // Generate meal plan via API. Bubble manages its own loading/error state and
   // passes freshly-edited anthropometry. Returns the plan (or null) — bubble
@@ -2216,8 +2255,47 @@ Análise prévia:
     setSavingPlan(true);
     try {
       await onSaveMealPlan(mealPlan);
+      setSavedPlanSignature(planSignature(mealPlan));
     } finally {
       setSavingPlan(false);
+    }
+  };
+
+  const handleRecalculateMacros = async () => {
+    if (!mealPlan || !currentPatient) return;
+    const anthro: any = {};
+    const ageFromBirth = currentPatient.birthDate
+      ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
+      : null;
+    if (currentPatient.weightKg) anthro.weightKg = currentPatient.weightKg;
+    if (currentPatient.heightCm) anthro.heightCm = currentPatient.heightCm;
+    if (ageFromBirth) anthro.age = ageFromBirth;
+
+    const auth = (await import('firebase/auth')).getAuth();
+    const idToken = await auth.currentUser?.getIdToken();
+    if (!idToken) throw new Error('Sessão expirada. Faça login novamente.');
+
+    const baseUrl = (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
+      ? 'https://echomed-p3tr.onrender.com'
+      : 'http://localhost:3001';
+
+    const resp = await fetch(`${baseUrl}/api/recalculate-macros`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        mealPlan,
+        patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
+      }),
+    });
+    if (!resp.ok) throw new Error('Erro ao recalcular macros');
+    const data = await resp.json();
+    if (data.macroEstimate) {
+      const updated = { ...mealPlan, macroEstimate: data.macroEstimate };
+      setMealPlan(updated);
+      if (onSaveResult) onSaveResult({ ...result, structuredMealPlan: updated });
     }
   };
 
@@ -2581,6 +2659,9 @@ Análise prévia:
           }}
           onSavePlan={onSaveMealPlan ? handleSaveMealPlanAsActive : undefined}
           saving={savingPlan}
+          onRecalculateMacros={currentPatient ? handleRecalculateMacros : undefined}
+          objective={planObjective}
+          savedSignature={savedPlanSignature}
         />
       )}
 

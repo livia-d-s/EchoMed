@@ -1,15 +1,98 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Utensils, Plus, X, Pencil, Check, Repeat, Save, Loader2, Clock } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { Utensils, Plus, X, Pencil, Check, Repeat, Save, Loader2, Clock, RefreshCw } from 'lucide-react';
 import { StructuredMealPlan, StructuredMeal, StructuredMealItem } from '../../../types';
 
 interface MealPlanCardProps {
   plan: StructuredMealPlan;
   onChange: (next: StructuredMealPlan) => void;
-  onSavePlan?: () => void;     // "Salvar como plano ativo"
+  onSavePlan?: () => Promise<void> | void;     // "Salvar como plano ativo"
   saving?: boolean;
+  onRecalculateMacros?: () => Promise<void>;
+  objective?: string | null;       // e.g. "emagrecimento", "ganho muscular"
+  savedSignature?: string | null;  // signature of the most recently saved plan (dedupe)
 }
 
-export function MealPlanCard({ plan, onChange, onSavePlan, saving }: MealPlanCardProps) {
+// Compact signature of the meals array — used to detect when macros are stale
+// and when the plan differs from what was last saved as active.
+export function planSignature(plan: StructuredMealPlan): string {
+  return plan.meals
+    .map((m) => `${m.name}|${(m.items || []).map((it) => it.food).join('//')}`)
+    .join('::');
+}
+
+export function MealPlanCard({
+  plan,
+  onChange,
+  onSavePlan,
+  saving,
+  onRecalculateMacros,
+  objective,
+  savedSignature,
+}: MealPlanCardProps) {
+  const [recalculating, setRecalculating] = useState(false);
+  const [autoRecalcArmed, setAutoRecalcArmed] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const baselineRef = useRef<string>(planSignature(plan));
+  const debounceRef = useRef<number | null>(null);
+
+  // Reset baseline whenever macros are refreshed (parent updates plan.macroEstimate after recalc/generate).
+  const macroId = useMemo(() => JSON.stringify(plan.macroEstimate || null), [plan.macroEstimate]);
+  useEffect(() => {
+    baselineRef.current = planSignature(plan);
+    setAutoRecalcArmed(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [macroId]);
+
+  const currentSig = planSignature(plan);
+  const macrosStale = !!plan.macroEstimate && currentSig !== baselineRef.current;
+
+  // Auto-recalc: when meals change, debounce 1.5s then recalc automatically.
+  useEffect(() => {
+    if (!onRecalculateMacros || !macrosStale || recalculating) return;
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    setAutoRecalcArmed(true);
+    debounceRef.current = window.setTimeout(async () => {
+      setAutoRecalcArmed(false);
+      setRecalculating(true);
+      try {
+        await onRecalculateMacros();
+      } catch {
+        /* parent surfaces the error; keep stale state visible */
+      } finally {
+        setRecalculating(false);
+      }
+    }, 1500);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSig, macrosStale]);
+
+  const handleManualRecalc = async () => {
+    if (!onRecalculateMacros || recalculating) return;
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    setAutoRecalcArmed(false);
+    setRecalculating(true);
+    try {
+      await onRecalculateMacros();
+    } finally {
+      setRecalculating(false);
+    }
+  };
+
+  // Save state: dedupe based on signature of the saved plan.
+  const isAlreadySaved = !!savedSignature && savedSignature === currentSig;
+  const handleSave = async () => {
+    if (!onSavePlan || saving || isAlreadySaved) return;
+    try {
+      await onSavePlan();
+      setJustSaved(true);
+      window.setTimeout(() => setJustSaved(false), 2500);
+    } catch {
+      /* parent surfaces error */
+    }
+  };
+
   const update = (next: StructuredMealPlan) => onChange(next);
 
   const updateMeal = (mealIdx: number, meal: StructuredMeal) => {
@@ -31,23 +114,37 @@ export function MealPlanCard({ plan, onChange, onSavePlan, saving }: MealPlanCar
   };
 
   return (
-    <div className="bg-gradient-to-br from-blue-50/40 to-indigo-50/40 border border-blue-100 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm">
+    <div id="meal-plan-section" className="bg-gradient-to-br from-blue-50/40 to-indigo-50/40 border border-blue-100 rounded-2xl md:rounded-3xl p-5 md:p-6 shadow-sm scroll-mt-32">
       {/* Header */}
       <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Utensils size={14} className="text-blue-600" />
           <h3 className="text-blue-700 font-black uppercase text-[10px] tracking-[0.2em]">
-            Plano Alimentar Sugerido
+            Plano Sugerido
+            {objective && (
+              <span className="text-blue-500/80 font-bold normal-case tracking-normal ml-1.5">
+                ({objective})
+              </span>
+            )}
           </h3>
         </div>
         {onSavePlan && (
           <button
-            onClick={onSavePlan}
-            disabled={saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-60"
+            onClick={handleSave}
+            disabled={saving || isAlreadySaved}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-white text-xs font-bold rounded-lg transition-colors ${
+              isAlreadySaved
+                ? 'bg-emerald-600 cursor-default'
+                : 'bg-blue-600 hover:bg-blue-700 disabled:opacity-60'
+            }`}
+            title={isAlreadySaved ? 'Este plano já está salvo como ativo' : 'Salvar como plano ativo'}
           >
             {saving ? (
               <><Loader2 size={12} className="animate-spin" /> Salvando…</>
+            ) : justSaved ? (
+              <><Check size={12} /> Salvo!</>
+            ) : isAlreadySaved ? (
+              <><Check size={12} /> Plano ativo</>
             ) : (
               <><Save size={12} /> Salvar como plano ativo</>
             )}
@@ -61,18 +158,45 @@ export function MealPlanCard({ plan, onChange, onSavePlan, saving }: MealPlanCar
 
       {/* Macros */}
       {plan.macroEstimate && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-5 bg-white rounded-xl border border-slate-100 p-3">
-          {plan.macroEstimate.calories != null && (
-            <MacroCell label="Calorias" value={`${plan.macroEstimate.calories} kcal`} />
-          )}
-          {plan.macroEstimate.protein && (
-            <MacroCell label="Proteínas" value={plan.macroEstimate.protein} />
-          )}
-          {plan.macroEstimate.carbs && (
-            <MacroCell label="Carbos" value={plan.macroEstimate.carbs} />
-          )}
-          {plan.macroEstimate.fat && (
-            <MacroCell label="Gorduras" value={plan.macroEstimate.fat} />
+        <div className={`relative mb-5 bg-white rounded-xl border p-3 transition-colors ${
+          macrosStale ? 'border-amber-200 bg-amber-50/40' : 'border-slate-100'
+        }`}>
+          <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 transition-opacity ${
+            macrosStale && !recalculating ? 'opacity-50' : ''
+          }`}>
+            {plan.macroEstimate.calories != null && (
+              <MacroCell label="Calorias" value={`${plan.macroEstimate.calories} kcal`} />
+            )}
+            {plan.macroEstimate.protein && (
+              <MacroCell label="Proteínas" value={plan.macroEstimate.protein} />
+            )}
+            {plan.macroEstimate.carbs && (
+              <MacroCell label="Carbos" value={plan.macroEstimate.carbs} />
+            )}
+            {plan.macroEstimate.fat && (
+              <MacroCell label="Gorduras" value={plan.macroEstimate.fat} />
+            )}
+          </div>
+          {(macrosStale || recalculating) && onRecalculateMacros && (
+            <div className="mt-2 pt-2 border-t border-amber-200 flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 text-[11px] text-amber-700 font-bold">
+                {recalculating ? (
+                  <><Loader2 size={12} className="animate-spin" /> Recalculando macros…</>
+                ) : autoRecalcArmed ? (
+                  <><Loader2 size={12} className="animate-spin opacity-60" /> Atualizando macros automaticamente…</>
+                ) : (
+                  <><RefreshCw size={12} /> Macros desatualizados</>
+                )}
+              </div>
+              {!recalculating && (
+                <button
+                  onClick={handleManualRecalc}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg transition-colors"
+                >
+                  <RefreshCw size={11} /> Recalcular agora
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}

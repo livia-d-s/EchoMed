@@ -20,6 +20,7 @@ interface PatientPageProps {
   onUpdateHighlights?: (patientId: string, highlights: string[]) => void;
   onUpdateExams?: (patientId: string, exams: PatientExam[]) => void;
   onUpdateMealPlans?: (patientId: string, mealPlans: MealPlan[]) => void;
+  onUpdatePatient?: (patientId: string, changes: Partial<Patient>) => void;
 }
 
 export function PatientPage({
@@ -35,6 +36,7 @@ export function PatientPage({
   onUpdateHighlights,
   onUpdateExams,
   onUpdateMealPlans,
+  onUpdatePatient,
 }: PatientPageProps) {
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
 
@@ -69,6 +71,7 @@ export function PatientPage({
         onNewAdjustment={() => setShowAdjustmentModal(true)}
         onEditPatient={onEditPatient}
         onUpdateHighlights={onUpdateHighlights}
+        onUpdatePatient={onUpdatePatient ? (changes) => onUpdatePatient(patient.id, changes) : undefined}
       />
 
       <div className="max-w-6xl mx-auto">

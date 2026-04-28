@@ -94,6 +94,25 @@ const DEFAULT_PROFILE: DoctorProfileType = {
   },
 };
 
+// Recursively strip `undefined` values from objects/arrays so Firestore
+// (which rejects undefined) doesn't blow up when patient fields are cleared.
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value
+      .filter((v) => v !== undefined)
+      .map((v) => stripUndefinedDeep(v)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const out: any = {};
+    for (const [k, v] of Object.entries(value as any)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefinedDeep(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 const safeParse = <T,>(raw: string | null, fallback: T): T => {
   if (!raw) return fallback;
   try {
@@ -184,7 +203,14 @@ export default function App() {
     localStorage.setItem(key, JSON.stringify(doctorProfile));
     if (db) {
       const { photo, ...profileWithoutPhoto } = doctorProfile;
-      setDoc(doc(db, 'users', userId, 'appData', 'profile'), profileWithoutPhoto, { merge: true })
+      // Firestore rejects single fields > ~1MB. If the cached logoUrl is too
+      // large (legacy uncompressed upload), drop it from the Firestore write so
+      // the rest of the profile still saves.
+      const FIRESTORE_FIELD_LIMIT = 1_048_487;
+      if (profileWithoutPhoto.logoUrl && profileWithoutPhoto.logoUrl.length > FIRESTORE_FIELD_LIMIT) {
+        delete profileWithoutPhoto.logoUrl;
+      }
+      setDoc(doc(db, 'users', userId, 'appData', 'profile'), stripUndefinedDeep(profileWithoutPhoto), { merge: true })
         .catch(err => console.error('Failed to save profile to Firestore:', err));
     }
   }, [doctorProfile, userId]);
@@ -226,7 +252,7 @@ export default function App() {
     if (!key || !userId) return;
     localStorage.setItem(key, JSON.stringify(patients));
     if (db && patients.length > 0) {
-      setDoc(doc(db, 'users', userId, 'appData', 'patients'), { items: patients })
+      setDoc(doc(db, 'users', userId, 'appData', 'patients'), stripUndefinedDeep({ items: patients }))
         .catch(err => console.error('Failed to save patients to Firestore:', err));
     }
   }, [patients, userId]);
@@ -260,7 +286,7 @@ export default function App() {
     if (!key || !userId) return;
     localStorage.setItem(key, JSON.stringify(events));
     if (db && events.length > 0) {
-      setDoc(doc(db, 'users', userId, 'appData', 'events'), { items: events })
+      setDoc(doc(db, 'users', userId, 'appData', 'events'), stripUndefinedDeep({ items: events }))
         .catch(err => console.error('Failed to save events to Firestore:', err));
     }
   }, [events, userId]);

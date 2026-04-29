@@ -371,19 +371,16 @@ sem inventar dados.
   }
 });
 
-// Recalculate macros for a structured meal plan after the nutri edited items/quantities
+// Recalculate macros for a structured meal plan after the nutri edited items/quantities.
+// Pure literal summation — patient anthropometry is intentionally NOT used here, because
+// macros depend on what's on the plate, not on who's eating it. Mixing the two biases
+// the model toward a target intake (e.g. ~1800 kcal for a 65kg/30y woman) instead of
+// summing the actual items.
 app.post('/api/recalculate-macros', apiLimiter, requireAuth, async (req, res) => {
   try {
-    const { mealPlan, patientAnthropometry } = req.body;
+    const { mealPlan } = req.body;
     if (!mealPlan || !Array.isArray(mealPlan.meals) || mealPlan.meals.length === 0) {
       return res.status(400).json({ error: 'mealPlan inválido ou vazio' });
-    }
-
-    const anthropoLines = [];
-    if (patientAnthropometry && typeof patientAnthropometry === 'object') {
-      if (patientAnthropometry.weightKg) anthropoLines.push(`Peso: ${patientAnthropometry.weightKg} kg`);
-      if (patientAnthropometry.heightCm) anthropoLines.push(`Altura: ${patientAnthropometry.heightCm} cm`);
-      if (patientAnthropometry.age) anthropoLines.push(`Idade: ${patientAnthropometry.age} anos`);
     }
 
     const planText = mealPlan.meals.map((m) => {
@@ -391,41 +388,76 @@ app.post('/api/recalculate-macros', apiLimiter, requireAuth, async (req, res) =>
       return `${m.name || 'Refeição'}${m.time ? ` (${m.time})` : ''}:\n${items}`;
     }).join('\n\n');
 
-    const prompt = `Você é nutricionista clínica. Calcule as estimativas de macronutrientes do plano alimentar abaixo, considerando as quantidades em medidas caseiras informadas. Use referências nutricionais brasileiras (TBCA/TACO).
+    const prompt = `Você é nutricionista clínica brasileira. Sua tarefa é SOMAR as calorias e macros de cada item do plano abaixo, na quantidade exatamente como foi escrita.
 
-${anthropoLines.length ? `[DADOS DA PACIENTE]\n${anthropoLines.join('\n')}\n\n` : ''}[PLANO ALIMENTAR]
+REGRAS CRÍTICAS:
+1. Some LITERALMENTE cada item da lista. NÃO ajuste para nenhum alvo metabólico (TMB/GET). NÃO normalize. NÃO arredonde para um intake típico (1800/2000 kcal etc.).
+2. Se um item não tiver quantidade explícita, use porção padrão: 1 copo = 200 ml, 1 fatia de pão = 30 g, 1 colher de sopa = 15 ml/g, 1 unidade média (fruta) = 120 g.
+3. Use TBCA/TACO como referência nutricional.
+4. Os totais devem refletir EXATAMENTE o que está escrito:
+   - Quantidades MAIORES → totais MAIORES (ex: "30 colheres de tapioca" >> "3 colheres de tapioca").
+   - Quantidades MENORES → totais MENORES.
+   - Itens a MAIS na lista → totais MAIORES (somar o item adicional aumenta os totais).
+   - Itens a MENOS na lista → totais MENORES (somente os itens listados entram na conta; o que não está listado NÃO entra).
+5. Some apenas o que ESTÁ na lista. Não invente itens, não traga itens "típicos" que faltariam.
+
+[PLANO ALIMENTAR]
 ${planText}
 
-Responda APENAS com um JSON neste formato (sem texto extra, sem markdown):
-{
-  "calories": 1800,
-  "protein": "90g",
-  "carbs": "220g",
-  "fat": "60g"
-}
+Antes de responder, no campo "breakdown" calcule item por item (food, kcal, prot_g, carb_g, fat_g). Depois some e preencha "totals". O "totals" DEVE ser a soma exata do "breakdown".
 
-Regras:
-- "calories" é número inteiro (kcal totais do dia)
-- "protein", "carbs", "fat" são strings com unidade em gramas (ex: "90g")
-- Some todos os itens de todas as refeições do dia
-- Se a quantidade de um item for absurda (ex: "30 colheres de tapioca"), reflita isso nos macros — NÃO normalize`;
+Responda APENAS com JSON puro neste schema:
+{
+  "breakdown": [
+    { "food": "<exatamente como escrito>", "kcal": <int>, "prot_g": <int>, "carb_g": <int>, "fat_g": <int> }
+  ],
+  "totals": {
+    "calories": <int>,
+    "protein": "<int>g",
+    "carbs": "<int>g",
+    "fat": "<int>g"
+  }
+}`;
 
     const result = await genAI.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
-      config: { responseMimeType: 'application/json' },
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.1,
+      },
     });
 
     const text = result.text || result.response?.text() || '';
     const clean = String(text).replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
+    // Prefer the totals field; fall back to summing the breakdown if totals is missing.
+    let totals = parsed.totals;
+    if (!totals && Array.isArray(parsed.breakdown)) {
+      const sum = parsed.breakdown.reduce(
+        (acc, it) => ({
+          kcal: acc.kcal + (Number(it.kcal) || 0),
+          prot: acc.prot + (Number(it.prot_g) || 0),
+          carb: acc.carb + (Number(it.carb_g) || 0),
+          fat: acc.fat + (Number(it.fat_g) || 0),
+        }),
+        { kcal: 0, prot: 0, carb: 0, fat: 0 }
+      );
+      totals = {
+        calories: Math.round(sum.kcal),
+        protein: `${Math.round(sum.prot)}g`,
+        carbs: `${Math.round(sum.carb)}g`,
+        fat: `${Math.round(sum.fat)}g`,
+      };
+    }
+
     res.json({
       macroEstimate: {
-        calories: typeof parsed.calories === 'number' ? parsed.calories : Number(parsed.calories) || undefined,
-        protein: parsed.protein || undefined,
-        carbs: parsed.carbs || undefined,
-        fat: parsed.fat || undefined,
+        calories: typeof totals?.calories === 'number' ? totals.calories : Number(totals?.calories) || undefined,
+        protein: totals?.protein || undefined,
+        carbs: totals?.carbs || undefined,
+        fat: totals?.fat || undefined,
       },
     });
   } catch (error) {

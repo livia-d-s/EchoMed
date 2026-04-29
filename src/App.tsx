@@ -2288,14 +2288,7 @@ Análise prévia:
   };
 
   const handleRecalculateMacros = async () => {
-    if (!mealPlan || !currentPatient) return;
-    const anthro: any = {};
-    const ageFromBirth = currentPatient.birthDate
-      ? Math.floor((Date.now() - new Date(currentPatient.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
-      : null;
-    if (currentPatient.weightKg) anthro.weightKg = currentPatient.weightKg;
-    if (currentPatient.heightCm) anthro.heightCm = currentPatient.heightCm;
-    if (ageFromBirth) anthro.age = ageFromBirth;
+    if (!mealPlan) return;
 
     const auth = (await import('firebase/auth')).getAuth();
     const idToken = await auth.currentUser?.getIdToken();
@@ -2311,10 +2304,10 @@ Análise prévia:
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${idToken}`,
       },
-      body: JSON.stringify({
-        mealPlan,
-        patientAnthropometry: Object.keys(anthro).length > 0 ? anthro : undefined,
-      }),
+      // Anthropometry is intentionally omitted: macros depend on what's in
+      // the plan, not on the patient. Sending it biases the LLM toward a
+      // target intake instead of literally summing the items.
+      body: JSON.stringify({ mealPlan }),
     });
     if (!resp.ok) throw new Error('Erro ao recalcular macros');
     const data = await resp.json();
